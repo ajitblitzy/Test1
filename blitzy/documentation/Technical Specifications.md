@@ -1,4 +1,366 @@
-# Technical Specification
+# Technical Specification — Test1 Staging-Approval Workflow
+
+This document is the formal technical specification for the **Staging-Approval Workflow** feature added to the Test1 Node.js HTTP server. It defines the requirement lifecycle state machine, API contracts, system architecture, security requirements, configuration reference, dependency constraints, and feature rules that govern the controlled promotion pipeline from prototype to production.
+
+The Staging-Approval Workflow enforces a strict `submitted → staged → approved → production` pipeline, ensuring that no prototype content reaches the production endpoint (`GET /`) without explicit approval. The default production response remains `Hello, World!\n` until a prototype is explicitly promoted through the workflow.
+
+---
+
+## 1. Requirement Lifecycle State Machine
+
+### 1.1 States
+
+The system defines five lifecycle states for each requirement:
+
+| State | Description |
+|-------|-------------|
+| `submitted` | Initial state upon creation via `POST /api/requirements`. The requirement prompt has been received and recorded. |
+| `staged` | A prototype has been automatically generated from the submitted prompt and is available for review at the staging endpoint. |
+| `approved` | A reviewer has explicitly approved the staged prototype via `POST /api/approve/:id`. The prototype is eligible for production promotion. |
+| `rejected` | A reviewer has explicitly rejected the staged prototype via `POST /api/reject/:id`. This is a **terminal state** — no further transitions are permitted. |
+| `production` | The approved prototype has been promoted to production via `POST /api/promote/:id` and is now served by `GET /`. This is a **terminal state** — no further transitions are permitted. |
+
+### 1.2 Valid Transitions
+
+| Transition | Trigger | Authentication Required |
+|------------|---------|------------------------|
+| `submitted → staged` | System auto-generates prototype (triggered after `POST /api/requirements`) | No |
+| `staged → approved` | `POST /api/approve/:id` | Yes (`x-api-key` header) |
+| `staged → rejected` | `POST /api/reject/:id` | Yes (`x-api-key` header) |
+| `approved → production` | `POST /api/promote/:id` | Yes (`x-api-key` header) |
+
+### 1.3 State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> submitted : POST /api/requirements
+    submitted --> staged : System generates prototype
+    staged --> approved : POST /api/approve/:id
+    staged --> rejected : POST /api/reject/:id
+    approved --> production : POST /api/promote/:id
+    rejected --> [*]
+    production --> [*]
+```
+
+### 1.4 Transition Guards
+
+| From State | To State | Guard Condition | Enforced By |
+|-----------|----------|----------------|-------------|
+| `submitted` | `staged` | Prototype content must be non-empty | `requirementStore.js` |
+| `staged` | `approved` | Must be in `staged` state; API key validated | `approvalController.js` + `authGuard.js` |
+| `staged` | `rejected` | Must be in `staged` state; API key validated | `approvalController.js` + `authGuard.js` |
+| `approved` | `production` | Must be in `approved` state; only one requirement in `production` at a time | `approvalController.js` |
+| Any | `submitted` | Not allowed — no backward transitions | `requirementStore.js` |
+| `rejected` | Any | Terminal state — no further transitions | `requirementStore.js` |
+
+### 1.5 Transition Rules
+
+- **No backward transitions**: Once a requirement advances to a later state, it cannot return to any earlier state (e.g., `approved` cannot transition back to `staged`).
+- **Terminal states are final**: Requirements in `rejected` or `production` state cannot be transitioned to any other state. These represent the end of the lifecycle.
+- **Idempotent transitions**: Attempting to transition a requirement to its current state returns the current state without error.
+- **Single active production**: Only one requirement may occupy the `production` state at any given time. Promoting a new requirement automatically archives the previously active production requirement.
+
+---
+
+## 2. API Contracts
+
+### 2.1 Endpoint Registry
+
+| Method | Path | Description | Auth | Request Body | Success Response |
+|--------|------|-------------|------|-------------|-----------------|
+| `GET` | `/` | Serve current production content | No | None | `200` — current production text (default: `Hello, World!\n`) |
+| `POST` | `/api/requirements` | Submit new requirement | No | `{ "prompt": "string", "description": "string" }` | `201 { "id": "uuid", "status": "submitted" }` |
+| `GET` | `/api/requirements` | List all requirements | No | None | `200 [{ "id", "prompt", "status", "createdAt" }]` |
+| `GET` | `/api/requirements/:id` | Get requirement detail | No | None | `200 { "id", "prompt", "status", "prototype", ... }` |
+| `GET` | `/staging` | List staged prototypes | No | None | `200 [{ "id", "prompt", "prototype", "status": "staged" }]` |
+| `GET` | `/staging/:id` | View staged prototype | No | None | `200` — Renders staged prototype content |
+| `POST` | `/api/approve/:id` | Approve staged prototype | Yes (`x-api-key`) | None | `200 { "id", "status": "approved" }` |
+| `POST` | `/api/reject/:id` | Reject staged prototype | Yes (`x-api-key`) | `{ "reason": "string" }` (optional) | `200 { "id", "status": "rejected" }` |
+| `POST` | `/api/promote/:id` | Promote approved to production | Yes (`x-api-key`) | None | `200 { "id", "status": "production" }` |
+| `GET` | `/health` | Health check | No | None | `200 { "status": "ok", "uptime": number }` |
+
+### 2.2 Error Responses
+
+| Status Code | Meaning | Example Condition |
+|-------------|---------|-------------------|
+| `400 Bad Request` | Invalid request body or missing required fields | `POST /api/requirements` without `prompt` field |
+| `401 Unauthorized` | Missing or invalid API key on protected endpoints | `POST /api/approve/:id` without valid `x-api-key` header |
+| `404 Not Found` | Requirement not found by ID, or route not matched | `GET /api/requirements/nonexistent-uuid` |
+| `405 Method Not Allowed` | HTTP method not supported for the given route | `DELETE /api/requirements` (unsupported method) |
+| `409 Conflict` | Invalid state transition attempted | `POST /api/approve/:id` on a `rejected` requirement |
+
+All error responses follow a standardized JSON format:
+
+```json
+{
+  "error": "string describing the error"
+}
+```
+
+### 2.3 Example Requests
+
+**Submit a new requirement:**
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/requirements \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Add user authentication", "description": "Implement login/logout endpoints"}'
+```
+
+**Approve a staged prototype:**
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/approve/<id> \
+  -H "x-api-key: <KEY>"
+```
+
+**Promote an approved prototype to production:**
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/promote/<id> \
+  -H "x-api-key: <KEY>"
+```
+
+**List all requirements:**
+
+```bash
+curl http://127.0.0.1:3000/api/requirements
+```
+
+**View a staged prototype:**
+
+```bash
+curl http://127.0.0.1:3000/staging/<id>
+```
+
+**Check server health:**
+
+```bash
+curl http://127.0.0.1:3000/health
+```
+
+---
+
+## 3. System Architecture
+
+### 3.1 Module Overview
+
+The application follows a modular architecture built entirely with Node.js built-in modules. All modules use the CommonJS module system (`require()` / `module.exports`).
+
+| Module | Path | Responsibility |
+|--------|------|---------------|
+| Entry Point | `server.js` | Creates the HTTP server using the built-in `http` module, imports the router, delegates all incoming requests to `router.handle(req, res)`. Retains hostname (`127.0.0.1`) and port (`3000`) configuration with startup logging. |
+| Router | `src/router.js` | URL pattern matching using `url.parse()` and `RegExp` for parameterized routes (`:id`). Dispatches matched routes to the appropriate controller. Returns `404` JSON for unmatched routes and `405` for method-mismatched routes. |
+| Production Controller | `src/controllers/productionController.js` | Handles `GET /` (serves current production content, defaulting to `Hello, World!\n`) and `GET /health` (returns server health status with uptime). |
+| Requirements Controller | `src/controllers/requirementsController.js` | Handles `POST /api/requirements` (submit new requirement), `GET /api/requirements` (list all), and `GET /api/requirements/:id` (detail view). Auto-generates a prototype and transitions to `staged` state upon submission. |
+| Staging Controller | `src/controllers/stagingController.js` | Handles `GET /staging` (list all staged prototypes) and `GET /staging/:id` (view specific staged prototype for reviewer inspection). |
+| Approval Controller | `src/controllers/approvalController.js` | Handles `POST /api/approve/:id`, `POST /api/reject/:id`, and `POST /api/promote/:id`. Enforces the approval state machine with authentication via `authGuard`. |
+| Body Parser | `src/middleware/bodyParser.js` | Parses JSON request bodies from Node.js request streams using `data`/`end` events. Handles malformed JSON gracefully with descriptive error responses. |
+| Auth Guard | `src/middleware/authGuard.js` | Validates API key from `x-api-key` request header against `process.env.BLITZY_CLIENT_API_KEY`. Uses constant-time string comparison (`crypto.timingSafeEqual`) to prevent timing attacks. |
+| Requirement Store | `src/models/requirementStore.js` | Singleton in-memory store backed by a JavaScript `Map`. Manages requirements with CRUD operations. Enforces the state machine with transition guard logic. Uses `crypto.randomUUID()` for ID generation. Emits state-change events via `events.EventEmitter`. |
+| Response Helper | `src/utils/responseHelper.js` | Shared helper functions: `sendJSON(res, statusCode, data)`, `sendText(res, statusCode, text)`, `sendError(res, statusCode, message)` for standardized API responses with correct `Content-Type` headers. |
+| Config | `src/config.js` | Centralizes hostname, port, and API key environment variable references with hardcoded defaults matching original values (`127.0.0.1`, `3000`). |
+
+### 3.2 Data Flow
+
+The request processing pipeline follows this sequence:
+
+1. **HTTP request arrives** at `server.js` on the configured hostname and port.
+2. **`server.js` delegates** to `router.handle(req, res)` — the router receives full control of the request.
+3. **Router parses** the URL and HTTP method using `url.parse()`, then matches against registered route patterns.
+4. **Router applies middleware** as needed — `bodyParser` for `POST` endpoints that require request body parsing, `authGuard` for protected endpoints requiring API key validation.
+5. **Router dispatches** the request to the matched controller function with parsed parameters (e.g., `:id`).
+6. **Controller interacts** with `requirementStore` for data operations (CRUD, state transitions).
+7. **Controller uses** `responseHelper` to send a standardized JSON or text response back to the client.
+
+If no route matches, the router returns a `404 Not Found` JSON response. If the route matches but the HTTP method is not supported, the router returns a `405 Method Not Allowed` JSON response.
+
+### 3.3 Project Structure
+
+```
+Test1/
+├── server.js                              # Application entry point — HTTP server with router integration
+├── package.json                           # Project manifest (zero external dependencies)
+├── .env.example                           # Environment variable documentation template
+├── README.md                              # Project documentation
+├── src/
+│   ├── config.js                          # Centralized configuration module
+│   ├── router.js                          # URL pattern-based request router
+│   ├── controllers/
+│   │   ├── productionController.js        # GET / and GET /health handlers
+│   │   ├── requirementsController.js      # Requirements CRUD API handlers
+│   │   ├── stagingController.js           # Staging review API handlers
+│   │   └── approvalController.js          # Approve/reject/promote API handlers
+│   ├── middleware/
+│   │   ├── bodyParser.js                  # JSON request body parser
+│   │   └── authGuard.js                   # API key authentication middleware
+│   ├── models/
+│   │   └── requirementStore.js            # In-memory data store with state machine
+│   └── utils/
+│       └── responseHelper.js              # Standardized response helpers
+├── tests/
+│   ├── router.test.js                     # Router unit tests
+│   ├── requirementStore.test.js           # Data store and state machine tests
+│   ├── requirementsController.test.js     # Requirements API tests
+│   ├── stagingController.test.js          # Staging API tests
+│   ├── approvalController.test.js         # Approval workflow tests
+│   └── integration/
+│       └── workflow.test.js               # End-to-end workflow integration tests
+├── docs/
+│   ├── api-reference.md                   # Complete REST API reference
+│   └── staging-workflow.md                # Staging-approval workflow guide
+└── blitzy/
+    └── documentation/
+        ├── Project Guide.md               # Task report and validation results
+        └── Technical Specifications.md    # This document
+```
+
+---
+
+## 4. Security Requirements
+
+### 4.1 API Key Authentication
+
+- **Protected endpoints**: `POST /api/approve/:id`, `POST /api/reject/:id`, and `POST /api/promote/:id` require API key authentication.
+- **Authentication mechanism**: Clients must include a valid API key in the `x-api-key` HTTP request header.
+- **Validation**: The `authGuard.js` middleware reads the `x-api-key` header value and compares it against the value of the `BLITZY_CLIENT_API_KEY` environment variable.
+- **Constant-time comparison**: The `authGuard.js` middleware uses `crypto.timingSafeEqual` (or an equivalent constant-time comparison function) to prevent timing attacks that could leak information about the API key.
+- **Failure response**: If the API key is missing or invalid, the server returns `401 Unauthorized` with a JSON error body. No details about why the key was rejected are disclosed.
+
+### 4.2 Secret Protection
+
+- API key values must **NEVER** be logged to stdout, stderr, or any log file.
+- API key values must **NEVER** be included in response bodies, error messages, or stack traces.
+- API key values must **NEVER** be exposed in client-facing error descriptions.
+
+### 4.3 Input Handling
+
+- User-submitted prompt text (via `POST /api/requirements`) is treated as **untrusted input**.
+- Prompt text is stored as-is in the in-memory data store but is never evaluated, executed, or interpreted as code.
+- Prototype generation uses prompt content for display purposes only — no dynamic code execution from user input.
+
+### 4.4 Network Security
+
+- The server runs on the loopback interface only (`127.0.0.1`) and does not implement HTTPS/TLS.
+- HTTPS/TLS is out of scope for this implementation. In a production deployment, a reverse proxy (e.g., Nginx) would terminate TLS.
+- No request rate limiting is implemented. This is an acknowledged out-of-scope limitation.
+
+### 4.5 Authentication Availability
+
+- If the `BLITZY_CLIENT_API_KEY` environment variable is not set, all protected endpoints return `401 Unauthorized` for every request. The system does not fall back to an open-access mode.
+
+---
+
+## 5. Configuration Reference
+
+### 5.1 Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BLITZY_CLIENT_API_KEY` | (none — must be set) | API key for authenticating approval, rejection, and promotion endpoints |
+| `BLITZY_CLIENT_API_KEY2` | (from env) | Additional API key available in the environment |
+| `BLITZY_CLIENT_API_KEY3` | (from env) | Additional API key available in the environment |
+| `PORT` | `3000` | Server listening port |
+| `HOSTNAME` | `127.0.0.1` | Server bind address |
+| `c` | (from env) | User-provided environment variable |
+| `d` | (from env) | User-provided environment variable |
+| `r` | (from env) | User-provided environment variable |
+
+### 5.2 Configuration Files
+
+- **`.env.example`**: Provides a template for all environment variables. Copy to `.env` and populate with actual values for local development.
+- **`src/config.js`**: Centralizes all configuration access with sensible defaults. Reads from `process.env` and falls back to hardcoded defaults (`127.0.0.1` for hostname, `3000` for port).
+
+### 5.3 Configuration Precedence
+
+1. Environment variables (highest priority)
+2. `src/config.js` hardcoded defaults (fallback)
+
+---
+
+## 6. Zero-Dependency Constraint
+
+### 6.1 Built-in Modules Used
+
+The project uses **exclusively** Node.js built-in modules. No external npm packages are permitted.
+
+| Module | Purpose | Used In |
+|--------|---------|---------|
+| `http` | HTTP server creation, request handling, response streaming | `server.js` |
+| `url` | URL parsing for route matching and query string extraction | `src/router.js` |
+| `crypto` | UUID generation via `crypto.randomUUID()`; constant-time comparison via `crypto.timingSafeEqual` | `src/models/requirementStore.js`, `src/middleware/authGuard.js` |
+| `events` | Event emitter for state transition notifications and workflow hooks | `src/models/requirementStore.js` |
+| `assert` | Built-in assertion library for test files | `tests/` (test files only) |
+| `fs` | File system operations (available but not currently used for persistence) | (optional — reserved for future use) |
+
+### 6.2 Package Manifest
+
+- `package.json` exists for project metadata, npm script definitions (`start`, `test`), and Node.js engine version specification only.
+- `dependencies` field: `{}` (empty — must remain empty).
+- `devDependencies` field: `{}` (empty — must remain empty).
+- No `node_modules` directory is required.
+
+### 6.3 Module System
+
+- **Module system**: CommonJS (`require()` / `module.exports`).
+- **ES Module syntax** (`import` / `export`) must **NOT** be used in any file.
+- All new and modified files must follow the CommonJS pattern established by `server.js`.
+
+### 6.4 Node.js Version Requirement
+
+- **Minimum version**: Node.js v4.0.0 (per the `engines` field in `package.json`).
+- **Target runtime**: Node.js v20.20.0 LTS ("Iron").
+- **Compatibility**: The codebase is designed to work with Node.js v4.x through v24.x.
+
+---
+
+## 7. Feature Rules and Constraints
+
+### 7.1 No Direct Production Mutation
+
+The production endpoint (`GET /`) must **never** be updated except through the explicit `POST /api/promote/:id` workflow. All changes to production content must flow through the complete `submitted → staged → approved → production` pipeline. Any code path that bypasses this pipeline is a violation of the core requirement.
+
+### 7.2 Staging Approval is Mandatory
+
+A prototype must pass through the `staged` state and be explicitly transitioned to `approved` before it can be promoted to production. There is no shortcut from `staged` to `production` and no shortcut from `submitted` to `production`.
+
+### 7.3 Backward Compatibility
+
+The default production response remains `Hello, World!\n` with HTTP `200 OK` and `Content-Type: text/plain` until an explicit promotion occurs. All existing behaviors documented in the original specification (B-001 through B-007) are preserved for the default case. The `GET /` endpoint continues to serve this default response until a prototype is explicitly promoted.
+
+### 7.4 Zero External Dependencies
+
+All functionality is implemented using only Node.js built-in modules. The `package.json` `dependencies` field must remain `{}`. No external npm packages may be introduced.
+
+### 7.5 CommonJS Module System
+
+All files must use `require()` / `module.exports` syntax. ES Module (`import` / `export`) syntax must not be introduced anywhere in the codebase.
+
+### 7.6 Authentication on Sensitive Endpoints
+
+The `approve`, `reject`, and `promote` endpoints must be protected by API key authentication using the `x-api-key` request header validated against the `BLITZY_CLIENT_API_KEY` environment variable. Unauthenticated requests to these endpoints must receive a `401 Unauthorized` response.
+
+### 7.7 Idempotent State Transitions
+
+Attempting to transition a requirement to its current state (e.g., approving an already-approved requirement) should return the current state without error, not cause a failure.
+
+### 7.8 Terminal States are Final
+
+Requirements in the `rejected` or `production` state must not be transitioned to any other state. These are terminal states in the lifecycle. Any attempt to transition from a terminal state must be rejected with a `409 Conflict` response.
+
+### 7.9 Single Active Production Prototype
+
+Only one requirement may be in the `production` state at any given time. Promoting a new requirement to production must automatically archive the previously active production requirement (transitioning it out of the active `production` state).
+
+### 7.10 Entry Point Preservation
+
+`server.js` remains the application entry point. No refactoring to a different entry point (e.g., `src/index.js`) is permitted. The first startup log line must include `Server running at http://{hostname}:{port}/` to maintain backward compatibility with tooling and documentation that checks for this output.
+
+---
+
+## Appendix A: Historical — README Documentation Task Specification
+
+> **Note:** The content below is historical context from the initial project phase — a documentation-only task focused on updating the README.md based on server.js analysis. It is preserved here for reference and traceability. The sections numbered 0.1 through 0.10 below reflect the original Agent Action Plan for that earlier documentation task.
 
 # 0. Agent Action Plan
 
