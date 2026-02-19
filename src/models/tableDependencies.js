@@ -32,11 +32,18 @@
 // ---------------------------------------------------------------------------
 
 /**
- * Singleton better-sqlite3 Database instance providing .prepare() for all
- * parameterized SQL operations against the table_dependencies table.
+ * Database connection module providing the singleton better-sqlite3 Database
+ * instance via a getter property.
+ *
+ * IMPORTANT: The connection module exports `db` as a getter so that consumers
+ * always receive the current (initialized) instance. We store a reference to
+ * the module object and access `.db` inside each function at call time, rather
+ * than destructuring at module load time (which would capture `null` before
+ * initializeDatabase() has been called by server.js).
+ *
  * @see src/db/connection.js
  */
-const { db } = require('../db/connection');
+const connection = require('../db/connection');
 
 // ---------------------------------------------------------------------------
 // Data access functions
@@ -55,7 +62,7 @@ const { db } = require('../db/connection');
  */
 const getAll = () => {
   try {
-    const stmt = db.prepare('SELECT * FROM table_dependencies');
+    const stmt = connection.db.prepare('SELECT * FROM table_dependencies');
     return stmt.all();
   } catch (err) {
     throw new Error(`Failed to retrieve all table dependencies: ${err.message}`);
@@ -76,7 +83,7 @@ const getAll = () => {
  */
 const getByParentId = (parentTableId) => {
   try {
-    const stmt = db.prepare('SELECT * FROM table_dependencies WHERE parent_table_id = ?');
+    const stmt = connection.db.prepare('SELECT * FROM table_dependencies WHERE parent_table_id = ?');
     return stmt.all(parentTableId);
   } catch (err) {
     throw new Error(`Failed to retrieve dependencies for parent_table_id ${parentTableId}: ${err.message}`);
@@ -106,7 +113,7 @@ const getByParentId = (parentTableId) => {
  */
 const create = (data) => {
   try {
-    const stmt = db.prepare(
+    const stmt = connection.db.prepare(
       'INSERT INTO table_dependencies (parent_table_id, dependent_object) VALUES (?, ?)'
     );
     return stmt.run(data.parent_table_id, data.dependent_object);
@@ -132,7 +139,7 @@ const create = (data) => {
  */
 const deleteByParentAndObject = (parentTableId, dependentObject) => {
   try {
-    const stmt = db.prepare(
+    const stmt = connection.db.prepare(
       'DELETE FROM table_dependencies WHERE parent_table_id = ? AND dependent_object = ?'
     );
     return stmt.run(parentTableId, dependentObject);
