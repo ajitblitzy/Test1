@@ -129,6 +129,13 @@ describe('Application Integration Tests', function () {
       expect(zlib.gunzipSync(res.rawBody).toString()).toBe('Hello, World!\n');
     });
 
+    test('compression applies deflate when Accept-Encoding: deflate present', async function () {
+      var res = await makeRequest(port, { path: '/', headers: { 'accept-encoding': 'deflate' } });
+      expect(res.headers['content-encoding']).toBe('deflate');
+      /* Rule R-001: decompressed body must be byte-identical */
+      expect(zlib.inflateSync(res.rawBody).toString()).toBe('Hello, World!\n');
+    });
+
     test('compression does NOT compress when Accept-Encoding absent', async function () {
       var res = await makeRequest(port, '/');
       expect(res.headers['content-encoding']).toBeUndefined();

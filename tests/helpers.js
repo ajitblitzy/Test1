@@ -18,6 +18,7 @@
  */
 
 const http = require('http');
+const { teardownGracefulShutdown } = require('../src/utils/graceful-shutdown');
 
 /**
  * Creates and starts an HTTP server using the provided factory function.
@@ -44,16 +45,22 @@ function createTestServer(createAppFn) {
 }
 
 /**
- * Gracefully closes a test server instance.
+ * Gracefully closes a test server instance and removes process-level
+ * event listeners registered by setupGracefulShutdown().
  *
  * Checks server.listening before calling server.close() to prevent
  * double-close errors when a shutdown test has already closed the server.
+ * Always calls teardownGracefulShutdown() to clean up SIGINT, SIGTERM,
+ * uncaughtException, and unhandledRejection listeners that would
+ * otherwise leak and cause Jest "worker process failed to exit
+ * gracefully" warnings.
  *
  * @param {import('http').Server} server - Server instance to close
  * @returns {Promise<void>}
  */
 function closeTestServer(server) {
   return new Promise(function (resolve) {
+    teardownGracefulShutdown();
     if (server && server.listening) {
       server.close(function () { resolve(); });
     } else {

@@ -95,8 +95,13 @@ describe('Hello World Response Contract', () => {
    * Test Group 2: Method-Agnostic Behavior (Rule R-002)
    *
    * The original server.js handler completely ignores the req object.
-   * GET, POST, PUT, and DELETE must all produce the same 200 text/plain
+   * All 7 HTTP methods specified in Rule R-002 (GET, POST, PUT, DELETE,
+   * PATCH, HEAD, OPTIONS) must produce the same 200 text/plain
    * Hello, World!\n response.
+   *
+   * Note: HEAD is a special case per HTTP/1.1 (RFC 7231 §4.3.2) — the
+   * server MUST NOT return a body in the response, but status and headers
+   * must be identical to a GET. Node.js enforces this automatically.
    * =================================================================== */
   describe('Method-Agnostic Behavior', () => {
     test('GET request returns Hello, World!', async () => {
@@ -113,6 +118,23 @@ describe('Hello World Response Contract', () => {
 
     test('DELETE request returns Hello, World!', async () => {
       expectHelloResponse(await makeRequest(port, '/', 'DELETE'));
+    });
+
+    test('PATCH request returns Hello, World!', async () => {
+      expectHelloResponse(await makeRequest(port, '/', 'PATCH'));
+    });
+
+    test('HEAD request returns correct status and headers (no body per HTTP spec)', async () => {
+      var res = await makeRequest(port, '/', 'HEAD');
+      /* HEAD responses carry the same status and headers as GET, but Node.js
+       * automatically suppresses the response body per RFC 7231 §4.3.2 */
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('text/plain');
+      expect(res.body).toBe('');
+    });
+
+    test('OPTIONS request returns Hello, World!', async () => {
+      expectHelloResponse(await makeRequest(port, '/', 'OPTIONS'));
     });
   });
 

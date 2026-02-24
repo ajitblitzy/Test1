@@ -48,6 +48,15 @@ let isShuttingDown = false;
  * @param {http.Server} server - The HTTP server instance to attach shutdown handlers to
  * @returns {void}
  */
+/**
+ * References to registered process event listeners, stored so they can be
+ * removed by teardownGracefulShutdown(). Without tracking these, the listeners
+ * persist after server.close() in test environments, causing Jest "worker
+ * process failed to exit gracefully" warnings due to leaked process listeners.
+ * @type {{ sigint: Function|null, sigterm: Function|null, uncaughtException: Function|null, unhandledRejection: Function|null }}
+ */
+let listeners = { sigint: null, sigterm: null, uncaughtException: null, unhandledRejection: null };
+
 function setupGracefulShutdown(server) {
   /**
    * Internal shutdown handler that orchestrates the graceful shutdown sequence.
@@ -85,23 +94,60 @@ function setupGracefulShutdown(server) {
     });
   }
 
-  // Signal handlers — ensure proper shutdown on Ctrl+C and container/PM stops
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-
-  // Global error handlers (AAP §0.7.3 Error Handling Gap Analysis)
-  // Catches unhandled exceptions that would otherwise crash the process
-  process.on('uncaughtException', (err) => {
+  // Store named references so teardownGracefulShutdown() can remove them later
+  listeners.sigint = () => shutdown('SIGINT');
+  listeners.sigterm = () => shutdown('SIGTERM');
+  listeners.uncaughtException = (err) => {
     console.error(`[Error] Uncaught exception: ${err.message}`);
     console.error(err.stack);
     shutdown('uncaughtException');
-  });
-
-  // Catches unhandled promise rejections that would otherwise only warn to stderr
-  process.on('unhandledRejection', (reason, promise) => {
+  };
+  listeners.unhandledRejection = (reason, promise) => {
     console.error(`[Error] Unhandled rejection: ${reason}`);
     shutdown('unhandledRejection');
-  });
+  };
+
+  // Signal handlers — ensure proper shutdown on Ctrl+C and container/PM stops
+  process.on('SIGINT', listeners.sigint);
+  process.on('SIGTERM', listeners.sigterm);
+
+  // Global error handlers (AAP §0.7.3 Error Handling Gap Analysis)
+  // Catches unhandled exceptions that would otherwise crash the process
+  process.on('uncaughtException', listeners.uncaughtException);
+
+  // Catches unhandled promise rejections that would otherwise only warn to stderr
+  process.on('unhandledRejection', listeners.unhandledRejection);
 }
 
-module.exports = { setupGracefulShutdown };
+/**
+ * Removes all process-level event listeners that were registered by
+ * setupGracefulShutdown(). Also resets the isShuttingDown flag so that a
+ * subsequent setupGracefulShutdown() call (e.g., in a new test) can
+ * register fresh listeners without the stale flag blocking shutdown.
+ *
+ * This function MUST be called during test teardown (afterAll) to prevent
+ * Jest "worker process failed to exit gracefully" warnings caused by
+ * leaked SIGINT/SIGTERM/uncaughtException/unhandledRejection listeners.
+ *
+ * Safe to call multiple times — silently no-ops if no listeners are registered.
+ *
+ * @returns {void}
+ */
+function teardownGracefulShutdown() {
+  if (listeners.sigint) {
+    process.removeListener('SIGINT', listeners.sigint);
+  }
+  if (listeners.sigterm) {
+    process.removeListener('SIGTERM', listeners.sigterm);
+  }
+  if (listeners.uncaughtException) {
+    process.removeListener('uncaughtException', listeners.uncaughtException);
+  }
+  if (listeners.unhandledRejection) {
+    process.removeListener('unhandledRejection', listeners.unhandledRejection);
+  }
+  listeners = { sigint: null, sigterm: null, uncaughtException: null, unhandledRejection: null };
+  isShuttingDown = false;
+}
+
+module.exports = { setupGracefulShutdown, teardownGracefulShutdown };
