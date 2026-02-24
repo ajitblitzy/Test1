@@ -41,7 +41,7 @@ A modular, performance-optimized Node.js HTTP server that responds with "Hello, 
 4. **Expected terminal output:**
 
    ```
-   [<timestamp>] [INFO] Server running at http://127.0.0.1:3000/ (PID: <pid>)
+   [Server] Running at http://127.0.0.1:3000/ (PID: <pid>)
    ```
 
 The server is now running and ready to accept HTTP requests.
@@ -217,6 +217,7 @@ npm test
 | `tests/hello.test.js` | Verifies the core `Hello, World!\n` response contract across all HTTP methods and paths |
 | `tests/health.test.js` | Validates the `/health` endpoint returns correct JSON with status, uptime, and memory fields |
 | `tests/app.test.js` | Integration tests for the composed application including middleware pipeline and graceful shutdown |
+| `tests/helpers.js` | Shared test utilities — server setup/teardown, HTTP request helper, and Hello World assertion |
 
 ## Project Structure
 
@@ -244,7 +245,8 @@ Test1/
 ├── tests/
 │   ├── hello.test.js
 │   ├── health.test.js
-│   └── app.test.js
+│   ├── app.test.js
+│   └── helpers.js
 └── blitzy/
     └── documentation/
         ├── Project Guide.md
