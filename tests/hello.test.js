@@ -39,92 +39,19 @@ process.env.PORT = '0';
 process.env.LOG_LEVEL = 'silent';
 process.env.ENABLE_CLUSTERING = 'false';
 
-const http = require('http');
 const { createApp } = require('../src/app');
+const { createTestServer, closeTestServer, makeRequest, expectHelloResponse } = require('./helpers');
 
 describe('Hello World Response Contract', () => {
-  /** @type {import('http').Server} */
-  let server;
+  let server, port;
 
-  /** @type {number} Dynamically assigned port from the OS */
-  let port;
-
-  /**
-   * Makes an HTTP request to the test server and collects the full response.
-   *
-   * Returns a Promise that resolves with an object containing the status code,
-   * response headers, and the complete response body as a string. The request
-   * does NOT send an Accept-Encoding header, so the compression middleware is
-   * a no-op and the response body arrives uncompressed and byte-identical.
-   *
-   * @param {string} [path='/'] - The URL path to request
-   * @param {string} [method='GET'] - The HTTP method to use
-   * @returns {Promise<{statusCode: number, headers: Object, body: string}>}
-   */
-  function makeRequest(path, method) {
-    if (path === undefined) { path = '/'; }
-    if (method === undefined) { method = 'GET'; }
-
-    return new Promise(function executor(resolve, reject) {
-      var options = {
-        hostname: '127.0.0.1',
-        port: port,
-        path: path,
-        method: method,
-      };
-
-      var req = http.request(options, function onResponse(res) {
-        var body = '';
-        res.on('data', function onData(chunk) {
-          body += chunk;
-        });
-        res.on('end', function onEnd() {
-          resolve({
-            statusCode: res.statusCode,
-            headers: res.headers,
-            body: body,
-          });
-        });
-      });
-
-      req.on('error', reject);
-      req.end();
-    });
-  }
-
-  /**
-   * Start the server once before all tests in this suite.
-   * Waits for the 'listening' event to ensure the OS has assigned a port
-   * and the server is ready to accept connections.
-   */
-  beforeAll(function (done) {
-    server = createApp();
-
-    /* Handle the (unlikely) race where listen completes synchronously */
-    if (server.listening) {
-      port = server.address().port;
-      done();
-    } else {
-      server.on('listening', function onListening() {
-        port = server.address().port;
-        done();
-      });
-    }
+  beforeAll(async () => {
+    var ctx = await createTestServer(createApp);
+    server = ctx.server;
+    port = ctx.port;
   });
 
-  /**
-   * Close the server after all tests complete.
-   * Prevents Jest "open handle" warnings by draining active connections.
-   */
-  afterAll(function (done) {
-    if (server && server.listening) {
-      server.close(function onClose() {
-        done();
-      });
-    } else {
-      done();
-    }
-  });
+  afterAll(() => closeTestServer(server));
 
   /* ===================================================================
    * Test Group 1: Response Contract (Status Code, Headers, Body)
@@ -136,17 +63,17 @@ describe('Hello World Response Contract', () => {
    * =================================================================== */
   describe('Response Contract', () => {
     test('responds with status code 200', async () => {
-      const response = await makeRequest('/');
+      var response = await makeRequest(port, '/');
       expect(response.statusCode).toBe(200);
     });
 
     test('responds with Content-Type text/plain', async () => {
-      const response = await makeRequest('/');
+      var response = await makeRequest(port, '/');
       expect(response.headers['content-type']).toBe('text/plain');
     });
 
     test('responds with body Hello, World!\\n (byte-identical to original)', async () => {
-      const response = await makeRequest('/');
+      var response = await makeRequest(port, '/');
 
       /* Rule R-001: byte-identical verification — every character matters:
        *   'H' (capital H) + 'ello, ' (comma + space) + 'W' (capital W)
@@ -173,31 +100,19 @@ describe('Hello World Response Contract', () => {
    * =================================================================== */
   describe('Method-Agnostic Behavior', () => {
     test('GET request returns Hello, World!', async () => {
-      const res = await makeRequest('/', 'GET');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/plain');
-      expect(res.body).toBe('Hello, World!\n');
+      expectHelloResponse(await makeRequest(port, '/', 'GET'));
     });
 
     test('POST request returns Hello, World!', async () => {
-      const res = await makeRequest('/', 'POST');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/plain');
-      expect(res.body).toBe('Hello, World!\n');
+      expectHelloResponse(await makeRequest(port, '/', 'POST'));
     });
 
     test('PUT request returns Hello, World!', async () => {
-      const res = await makeRequest('/', 'PUT');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/plain');
-      expect(res.body).toBe('Hello, World!\n');
+      expectHelloResponse(await makeRequest(port, '/', 'PUT'));
     });
 
     test('DELETE request returns Hello, World!', async () => {
-      const res = await makeRequest('/', 'DELETE');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/plain');
-      expect(res.body).toBe('Hello, World!\n');
+      expectHelloResponse(await makeRequest(port, '/', 'DELETE'));
     });
   });
 
@@ -209,31 +124,19 @@ describe('Hello World Response Contract', () => {
    * =================================================================== */
   describe('Path-Agnostic Behavior', () => {
     test('/ returns Hello, World!', async () => {
-      const res = await makeRequest('/');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/plain');
-      expect(res.body).toBe('Hello, World!\n');
+      expectHelloResponse(await makeRequest(port, '/'));
     });
 
     test('/foo returns Hello, World!', async () => {
-      const res = await makeRequest('/foo');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/plain');
-      expect(res.body).toBe('Hello, World!\n');
+      expectHelloResponse(await makeRequest(port, '/foo'));
     });
 
     test('/bar/baz returns Hello, World!', async () => {
-      const res = await makeRequest('/bar/baz');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/plain');
-      expect(res.body).toBe('Hello, World!\n');
+      expectHelloResponse(await makeRequest(port, '/bar/baz'));
     });
 
     test('/nonexistent/deep/path returns Hello, World!', async () => {
-      const res = await makeRequest('/nonexistent/deep/path');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/plain');
-      expect(res.body).toBe('Hello, World!\n');
+      expectHelloResponse(await makeRequest(port, '/nonexistent/deep/path'));
     });
   });
 
@@ -246,18 +149,9 @@ describe('Hello World Response Contract', () => {
    * =================================================================== */
   describe('Idempotency', () => {
     test('repeated requests produce identical responses', async () => {
-      var requestCount = 5;
       var results = [];
-
-      for (var i = 0; i < requestCount; i++) {
-        results.push(await makeRequest('/'));
-      }
-
-      for (var j = 0; j < results.length; j++) {
-        expect(results[j].statusCode).toBe(200);
-        expect(results[j].headers['content-type']).toBe('text/plain');
-        expect(results[j].body).toBe('Hello, World!\n');
-      }
+      for (var i = 0; i < 5; i++) { results.push(await makeRequest(port, '/')); }
+      for (var j = 0; j < results.length; j++) { expectHelloResponse(results[j]); }
     });
   });
 
@@ -270,15 +164,9 @@ describe('Hello World Response Contract', () => {
    * =================================================================== */
   describe('Health Route Differentiation', () => {
     test('/health does NOT return Hello, World! response', async () => {
-      const res = await makeRequest('/health');
-
-      /* Content-Type must be application/json, not text/plain */
+      var res = await makeRequest(port, '/health');
       expect(res.headers['content-type']).toBe('application/json');
-
-      /* Body must NOT be the Hello World string */
       expect(res.body).not.toBe('Hello, World!\n');
-
-      /* Body must be valid JSON with expected health fields */
       var healthData = JSON.parse(res.body);
       expect(healthData).toHaveProperty('status');
       expect(healthData).toHaveProperty('uptime');
@@ -289,8 +177,7 @@ describe('Hello World Response Contract', () => {
     });
 
     test('/health returns status code 200', async () => {
-      const res = await makeRequest('/health');
-      expect(res.statusCode).toBe(200);
+      expect((await makeRequest(port, '/health')).statusCode).toBe(200);
     });
   });
 });

@@ -46,121 +46,29 @@ process.env.LOG_LEVEL = 'info';
 const http = require('http');
 const zlib = require('zlib');
 const { createApp } = require('../src/app');
+const { createTestServer, closeTestServer, makeRequest } = require('./helpers');
 
 describe('Application Integration Tests', function () {
-  /** @type {import('http').Server} */
-  var server;
-
-  /** @type {number} Dynamically assigned port from the OS */
-  var port;
-
-  /** @type {jest.SpyInstance} Spy capturing console.log calls */
-  var logSpy;
-
-  /** @type {jest.SpyInstance} Spy capturing console.error calls */
-  var errorSpy;
-
-  /**
-   * Makes an HTTP request to the test server and returns a Promise.
-   *
-   * Collects response data as raw Buffer chunks so that compressed responses
-   * can be accurately decompressed in the compression middleware tests.
-   * Returns both the string representation (body) and the raw Buffer (rawBody).
-   *
-   * Uses 'Connection: close' header to ensure the TCP connection is torn down
-   * after each response, preventing keep-alive connections from blocking
-   * server.close() during afterAll teardown (Node.js v20 defaults to keep-alive).
-   *
-   * @param {Object}  options             - Request configuration
-   * @param {string}  [options.path='/']  - URL path to request
-   * @param {string}  [options.method='GET'] - HTTP method to use
-   * @param {Object}  [options.headers={}]   - Additional request headers
-   * @returns {Promise<{statusCode: number, headers: Object, body: string, rawBody: Buffer}>}
-   */
-  function makeRequest(options) {
-    var reqPath = (options && options.path) || '/';
-    var reqMethod = (options && options.method) || 'GET';
-    var extraHeaders = (options && options.headers) || {};
-
-    return new Promise(function executor(resolve, reject) {
-      var reqOptions = {
-        hostname: '127.0.0.1',
-        port: port,
-        path: reqPath,
-        method: reqMethod,
-        headers: Object.assign({ 'Connection': 'close' }, extraHeaders),
-      };
-
-      var req = http.request(reqOptions, function onResponse(res) {
-        var chunks = [];
-        res.on('data', function onData(chunk) {
-          chunks.push(chunk);
-        });
-        res.on('end', function onEnd() {
-          var rawBody = Buffer.concat(chunks);
-          resolve({
-            statusCode: res.statusCode,
-            headers: res.headers,
-            body: rawBody.toString(),
-            rawBody: rawBody,
-          });
-        });
-      });
-
-      req.on('error', reject);
-      req.end();
-    });
-  }
+  var server, port, logSpy, errorSpy;
 
   /**
    * Start the server and install console spies before all tests.
-   *
-   * Console spies suppress actual stdout/stderr output while still allowing
-   * the logger middleware to execute its console.log call. This keeps test
-   * output clean while enabling the logger test to inspect spy call history.
+   * Console spies suppress stdout/stderr while allowing the logger
+   * middleware to execute, enabling the logger test to inspect spy history.
    */
-  beforeAll(function (done) {
+  beforeAll(async function () {
     logSpy = jest.spyOn(console, 'log').mockImplementation(function () {});
     errorSpy = jest.spyOn(console, 'error').mockImplementation(function () {});
-
-    server = createApp();
-
-    /* Handle synchronous and asynchronous listen completion */
-    if (server.listening) {
-      port = server.address().port;
-      done();
-    } else {
-      server.on('listening', function onListening() {
-        port = server.address().port;
-        done();
-      });
-    }
+    var ctx = await createTestServer(createApp);
+    server = ctx.server;
+    port = ctx.port;
   });
 
-  /**
-   * Clear spy call history before each test so assertions inspect only
-   * the calls made during that specific test case.
-   */
-  beforeEach(function () {
-    logSpy.mockClear();
-    errorSpy.mockClear();
-  });
+  /** Clear spy call history before each test for isolated assertions. */
+  beforeEach(function () { logSpy.mockClear(); errorSpy.mockClear(); });
 
-  /**
-   * Restore all mocked functions and close the server after all tests.
-   * The server.listening check prevents double-close errors if the
-   * Server Shutdown test group already closed the server.
-   */
-  afterAll(function (done) {
-    jest.restoreAllMocks();
-    if (server && server.listening) {
-      server.close(function onClose() {
-        done();
-      });
-    } else {
-      done();
-    }
-  });
+  /** Restore mocks and close the server after all tests complete. */
+  afterAll(async function () { jest.restoreAllMocks(); await closeTestServer(server); });
 
   /* ===================================================================
    * Test Group 1: Server Lifecycle
@@ -171,13 +79,8 @@ describe('Application Integration Tests', function () {
    * =================================================================== */
   describe('Server Lifecycle', function () {
     test('server starts and listens successfully', function () {
-      /* Verify the return value is an http.Server instance */
       expect(server).toBeInstanceOf(http.Server);
-
-      /* Verify the server is actively accepting connections */
       expect(server.listening).toBe(true);
-
-      /* Verify address metadata is populated */
       var address = server.address();
       expect(address).toBeTruthy();
       expect(typeof address.port).toBe('number');
@@ -185,8 +88,7 @@ describe('Application Integration Tests', function () {
     });
 
     test('server responds to HTTP requests', async function () {
-      var res = await makeRequest({ path: '/' });
-
+      var res = await makeRequest(port, '/');
       expect(res.statusCode).toBe(200);
       /* Rule R-001: byte-identical Hello, World!\n */
       expect(res.body).toBe('Hello, World!\n');
@@ -203,62 +105,33 @@ describe('Application Integration Tests', function () {
    * =================================================================== */
   describe('Middleware Pipeline', function () {
     test('request logging middleware is active', async function () {
-      await makeRequest({ path: '/' });
+      await makeRequest(port, '/');
 
       /*
-       * The logger middleware (src/middleware/logger.js) calls console.log
-       * with the format string: '[%s] %s %s %d %sms'
-       * Arguments: timestamp, method, url, statusCode, responseTimeMs
-       *
-       * Filter out non-logger calls (e.g. startup message from createApp)
-       * by matching the distinctive format string pattern.
+       * The logger middleware calls console.log with the format string:
+       * '[%s] %s %s %d %sms' — match on the distinctive format tokens.
        */
-      var requestLogCall = logSpy.mock.calls.find(function (callArgs) {
-        return typeof callArgs[0] === 'string' &&
-               callArgs[0].indexOf('%s') !== -1 &&
-               callArgs[0].indexOf('%d') !== -1 &&
-               callArgs[0].indexOf('ms') !== -1;
+      var logCall = logSpy.mock.calls.find(function (a) {
+        return typeof a[0] === 'string' && a[0].indexOf('%s') !== -1 && a[0].indexOf('%d') !== -1;
       });
-
-      expect(requestLogCall).toBeTruthy();
-
-      /* Validate the captured log components */
-      /* callArgs[1] = ISO timestamp (string) */
-      expect(typeof requestLogCall[1]).toBe('string');
-      /* callArgs[2] = HTTP method */
-      expect(requestLogCall[2]).toBe('GET');
-      /* callArgs[3] = URL path */
-      expect(requestLogCall[3]).toBe('/');
-      /* callArgs[4] = HTTP status code */
-      expect(requestLogCall[4]).toBe(200);
-      /* callArgs[5] = response time in ms (string like "0.52") */
-      expect(typeof requestLogCall[5]).toBe('string');
+      expect(logCall).toBeTruthy();
+      expect(typeof logCall[1]).toBe('string');
+      expect(logCall[2]).toBe('GET');
+      expect(logCall[3]).toBe('/');
+      expect(logCall[4]).toBe(200);
+      expect(typeof logCall[5]).toBe('string');
     });
 
-    test('compression middleware applies gzip when Accept-Encoding header is present', async function () {
-      var res = await makeRequest({
-        path: '/',
-        headers: { 'accept-encoding': 'gzip' },
-      });
-
-      /* Verify the Content-Encoding header indicates gzip compression */
+    test('compression applies gzip when Accept-Encoding present', async function () {
+      var res = await makeRequest(port, { path: '/', headers: { 'accept-encoding': 'gzip' } });
       expect(res.headers['content-encoding']).toBe('gzip');
-
-      /*
-       * Decompress the raw response body and verify byte-identical content.
-       * Rule R-001: decompressed body must be exactly 'Hello, World!\n'.
-       */
-      var decompressed = zlib.gunzipSync(res.rawBody);
-      expect(decompressed.toString()).toBe('Hello, World!\n');
+      /* Rule R-001: decompressed body must be byte-identical */
+      expect(zlib.gunzipSync(res.rawBody).toString()).toBe('Hello, World!\n');
     });
 
-    test('compression middleware does NOT compress when Accept-Encoding is absent', async function () {
-      var res = await makeRequest({ path: '/' });
-
-      /* No Content-Encoding header should be set */
+    test('compression does NOT compress when Accept-Encoding absent', async function () {
+      var res = await makeRequest(port, '/');
       expect(res.headers['content-encoding']).toBeUndefined();
-
-      /* Body is raw, uncompressed Hello, World!\n */
       expect(res.body).toBe('Hello, World!\n');
     });
   });
@@ -269,18 +142,12 @@ describe('Application Integration Tests', function () {
    * Verifies that the routing logic in src/app.js correctly dispatches:
    *   - /health → healthHandler (JSON response with server metrics)
    *   - all other paths → helloHandler (text/plain Hello World)
-   *
-   * Rule R-009: /health is the ONLY differentiated route.
-   * Rule R-002: All other paths are method-agnostic and path-agnostic.
    * =================================================================== */
   describe('Route Integration', function () {
     test('routes /health to health handler', async function () {
-      var res = await makeRequest({ path: '/health' });
-
+      var res = await makeRequest(port, '/health');
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toBe('application/json');
-
-      /* Parse and validate the health response JSON structure */
       var json = JSON.parse(res.body);
       expect(json).toHaveProperty('status');
       expect(json).toHaveProperty('uptime');
@@ -292,12 +159,10 @@ describe('Application Integration Tests', function () {
 
     test('routes all other paths to hello handler', async function () {
       var paths = ['/', '/foo', '/bar/baz', '/anything/else'];
-
       for (var i = 0; i < paths.length; i++) {
-        var res = await makeRequest({ path: paths[i] });
+        var res = await makeRequest(port, paths[i]);
         expect(res.statusCode).toBe(200);
         expect(res.headers['content-type']).toBe('text/plain');
-        /* Rule R-001: byte-identical Hello, World!\n */
         expect(res.body).toBe('Hello, World!\n');
       }
     });
@@ -307,38 +172,19 @@ describe('Application Integration Tests', function () {
    * Test Group 4: Server Shutdown
    *
    * Validates that server.close() properly stops the server from accepting
-   * new connections. This exercises the graceful-shutdown integration by
-   * confirming the server transitions from the listening state to closed.
-   *
-   * NOTE: This test MUST run last because it closes the shared server
-   * instance. The afterAll handler checks server.listening before
+   * new connections. This test MUST run last because it closes the shared
+   * server instance. The afterAll handler checks server.listening before
    * attempting close, so a double-close is prevented.
    * =================================================================== */
   describe('Server Shutdown', function () {
     test('server.close() stops accepting new connections', function (done) {
       var testPort = port;
-
-      server.close(function onClose() {
-        /* Server is closed — new connection attempts should be refused */
+      server.close(function () {
         var req = http.request(
-          {
-            hostname: '127.0.0.1',
-            port: testPort,
-            path: '/',
-            method: 'GET',
-            headers: { 'Connection': 'close' },
-          },
-          function onResponse() {
-            /* If we get a response, the server is still accepting — fail */
-            done(new Error('Expected connection to be refused after server.close()'));
-          }
+          { hostname: '127.0.0.1', port: testPort, path: '/', method: 'GET', headers: { 'Connection': 'close' } },
+          function () { done(new Error('Expected ECONNREFUSED after server.close()')); }
         );
-
-        req.on('error', function onError(err) {
-          expect(err.code).toBe('ECONNREFUSED');
-          done();
-        });
-
+        req.on('error', function (err) { expect(err.code).toBe('ECONNREFUSED'); done(); });
         req.end();
       });
     });
