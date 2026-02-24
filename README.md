@@ -90,7 +90,7 @@ curl http://127.0.0.1:3000/health
 {
   "status": "OK",
   "uptime": 42.567,
-  "timestamp": "2025-01-01T00:00:00.000Z",
+  "timestamp": 1706745600000,
   "memoryUsage": {
     "rss": 30408704,
     "heapTotal": 6307840,
@@ -114,7 +114,8 @@ Server configuration is driven by environment variables with sensible defaults. 
 | `HOST` | `127.0.0.1` | Network interface to bind to |
 | `PORT` | `3000` | TCP port to listen on |
 | `ENABLE_CLUSTERING` | `false` | Enable multi-core clustering (one worker per CPU core) |
-| `LOG_LEVEL` | `info` | Logging verbosity level (`info`, `warn`, `error`) |
+| `LOG_LEVEL` | `info` | Logging verbosity level (`silent`, `error`, `warn`, `info`) |
+| `SHUTDOWN_TIMEOUT` | `5000` | Time in milliseconds to wait for in-flight requests to drain before force-killing |
 
 See `.env.example` for a template configuration file. Copy it to `.env` and adjust values as needed:
 

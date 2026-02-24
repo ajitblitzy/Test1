@@ -9,5 +9,8 @@
   },
   "devDependencies": {
     "jest": "29.7.0"
+  },
+  "overrides": {
+    "minimatch": ">=10.2.1"
   }
 }

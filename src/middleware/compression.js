@@ -45,7 +45,15 @@ const zlib = require('zlib');
 function compressResponse(req, res) {
   const acceptEncoding = req.headers['accept-encoding'] || '';
 
-  /* Determine the best encoding — gzip takes priority over deflate */
+  /*
+   * Determine the best encoding — gzip takes priority over deflate.
+   *
+   * Note: This uses simple substring matching and does not parse RFC 7231
+   * quality factors (e.g., 'gzip;q=0' would still match as supported).
+   * In practice, clients virtually never send q=0 to explicitly disable an
+   * encoding. Full quality-factor parsing is a future improvement if strict
+   * HTTP content negotiation compliance is required.
+   */
   let encoding = null;
 
   if (acceptEncoding.includes('gzip')) {

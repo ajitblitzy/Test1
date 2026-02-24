@@ -11,7 +11,7 @@
  *   HOST              - Network interface to bind to (default: '127.0.0.1')
  *   PORT              - TCP port to listen on (default: 3000)
  *   ENABLE_CLUSTERING - Enable multi-core clustering via the cluster module (default: false)
- *   LOG_LEVEL         - Logging verbosity level: 'error' | 'warn' | 'info' | 'debug' (default: 'info')
+ *   LOG_LEVEL         - Logging verbosity level: 'silent' | 'error' | 'warn' | 'info' (default: 'info')
  *
  * @module config
  */
@@ -26,6 +26,7 @@
  * @property {number}  port             - TCP port number for the HTTP server to listen on.
  *                                        Sourced from process.env.PORT, parsed as base-10 integer,
  *                                        defaults to 3000. Non-numeric values fall back to 3000.
+ *                                        PORT=0 is preserved (OS auto-assigns an available port).
  * @property {boolean} enableClustering - Whether to fork worker processes for multi-core utilization.
  *                                        Sourced from process.env.ENABLE_CLUSTERING, only 'true'
  *                                        (case-sensitive) enables clustering; all other values
@@ -33,9 +34,12 @@
  * @property {string}  logLevel         - Minimum severity level for log output.
  *                                        Sourced from process.env.LOG_LEVEL, defaults to 'info'.
  */
+/* Parse PORT with explicit NaN check to preserve PORT=0 (OS auto-assign) */
+const parsedPort = parseInt(process.env.PORT, 10);
+
 const config = Object.freeze({
   host: process.env.HOST || '127.0.0.1',
-  port: parseInt(process.env.PORT, 10) || 3000,
+  port: Number.isNaN(parsedPort) ? 3000 : parsedPort,
   enableClustering: process.env.ENABLE_CLUSTERING === 'true',
   logLevel: process.env.LOG_LEVEL || 'info',
 });
