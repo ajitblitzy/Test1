@@ -48,25 +48,21 @@ function createApp() {
    *   - all other paths → helloHandler (200, text/plain, "Hello, World!\n")
    */
   const server = http.createServer((req, res) => {
-    /* Security header applied to every response (AAP §0.7.4) */
+    /* Security header applied to every response (AAP §0.7.4).
+     * Set early so both middleware wrappers and handlers inherit it. */
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
-    /*
-     * Middleware pipeline — order matters:
+    /* Middleware pipeline — order matters:
      *   requestLogger wraps res.end FIRST (outermost), so its callback
-     *   executes LAST — after compression and the handler — ensuring
-     *   the captured status code and elapsed time reflect the full pipeline.
+     *   executes LAST — after compression and the handler.
      *   compressResponse wraps res.end SECOND (inner), so compression
-     *   happens before the logger's post-response callback fires.
-     */
+     *   happens before the logger's post-response callback fires. */
     requestLogger(req, res);
     compressResponse(req, res);
 
-    /*
-     * Route the request (Rule R-009):
+    /* Route the request (Rule R-009):
      *   /health is the ONLY differentiated route.
-     *   All other paths (method-agnostic, path-agnostic) → Hello World.
-     */
+     *   All other paths (method-agnostic, path-agnostic) → Hello World. */
     if (req.url === '/health') {
       healthHandler(req, res);
     } else {

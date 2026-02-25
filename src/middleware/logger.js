@@ -44,8 +44,10 @@ const config = require('../../config');
  * @returns {void}
  */
 function requestLogger(req, res) {
-  /* Capture high-resolution start time (seconds + nanoseconds tuple). */
-  const startTime = process.hrtime();
+  /* Capture high-resolution start time as a single BigInt nanosecond value.
+   * process.hrtime.bigint() avoids the [seconds, nanoseconds] array
+   * allocation that process.hrtime() produces on every call. */
+  const startNs = process.hrtime.bigint();
 
   /* Preserve a reference to the original, un-patched res.end. */
   const originalEnd = res.end;
@@ -65,8 +67,7 @@ function requestLogger(req, res) {
 
     /* Emit the log line unless logging has been silenced via configuration. */
     if (config.logLevel !== 'silent') {
-      const diff = process.hrtime(startTime);
-      const responseTimeMs = (diff[0] * 1e3 + diff[1] / 1e6).toFixed(2);
+      const elapsedMs = Number(process.hrtime.bigint() - startNs) / 1e6;
 
       console.log(
         '[%s] %s %s %d %sms',
@@ -74,7 +75,7 @@ function requestLogger(req, res) {
         req.method,
         req.url,
         res.statusCode,
-        responseTimeMs
+        elapsedMs.toFixed(2)
       );
     }
 

@@ -32,17 +32,18 @@
  * @param {http.ServerResponse} res - The HTTP server response object
  */
 function healthHandler(req, res) {
-  const healthData = {
+  const body = JSON.stringify({
     status: 'OK',
     uptime: process.uptime(),
     timestamp: Date.now(),
     memoryUsage: process.memoryUsage(),
-    pid: process.pid
-  };
+    pid: process.pid,
+  });
 
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify(healthData));
+  res.setHeader('Content-Length', Buffer.byteLength(body));
+  res.end(body);
 }
 
 module.exports = { healthHandler };

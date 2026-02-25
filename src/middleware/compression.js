@@ -84,13 +84,13 @@ function compressResponse(req, res) {
       return originalEnd.call(res, chunk, encodingArg, callback);
     }
 
-    /* Normalise chunk to a Buffer for the zlib one-shot functions */
-    const body = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, typeof encodingArg === 'string' ? encodingArg : undefined);
-
     /* Select the appropriate one-shot compression function */
     const compressFn = encoding === 'gzip' ? zlib.gzip : zlib.deflate;
 
-    compressFn(body, function onCompressed(err, compressed) {
+    /* zlib one-shot functions accept both Buffer and string inputs natively,
+     * so we pass the chunk directly — avoiding an intermediate Buffer.from()
+     * allocation on the hot path when the handler sends a string body. */
+    compressFn(chunk, function onCompressed(err, compressed) {
       if (err) {
         /* Compression failed — fall back to the uncompressed body */
         return originalEnd.call(res, chunk, encodingArg, callback);
