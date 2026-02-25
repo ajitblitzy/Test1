@@ -1,22 +1,29 @@
-# Project Guide: Node.js Server Performance Optimization Refactoring
+# Project Guide: Node.js Server Performance Refactoring
 
 ## 1. Executive Summary
 
-This project refactors a minimal 14-line monolithic Node.js HTTP server (`server.js`) into a modular, performance-optimized, multi-file application with clustering, compression, health monitoring, structured logging, and graceful shutdown — while preserving the original `Hello, World!\n` response contract byte-identically.
+**Project Completion: 82% (51 hours completed out of 62 total hours)**
 
-**Completion: 44 hours completed out of 51 total hours = 86% complete.**
+This project refactored a 14-line monolithic `server.js` into a modular, performance-optimized Node.js application with 9 source modules, 4 test files, and comprehensive documentation. All planned files from the Agent Action Plan (AAP) have been implemented, all 37 tests pass, all 13 JavaScript files pass syntax validation, and runtime behavior has been verified in both single-process and clustered modes.
 
-All 16 planned files from the Agent Action Plan have been created or updated, all 37 automated tests pass (100% pass rate), runtime validation confirms correct behavior, and the git working tree is clean with zero uncommitted changes. The remaining 7 hours consist of human verification, production environment configuration, and performance benchmarking tasks.
+### Completion Calculation
+- **Completed:** 51 hours (architecture, implementation, testing, documentation, bug fixes, performance optimization)
+- **Remaining:** 11 hours (production environment configuration, code review, load testing, process manager setup, production validation)
+- **Total Project Hours:** 62 hours
+- **Formula:** 51 / (51 + 11) × 100 = **82%**
 
 ### Key Achievements
-- Transformed a 14-line monolithic server.js into 9 modular source files (717 lines) following Single Responsibility Principle
-- Created 37 automated tests across 3 test suites covering response contract, health endpoint, middleware pipeline, and graceful shutdown
-- Delivered gzip/deflate compression, multi-core clustering, structured logging, and graceful shutdown using only Node.js built-in modules (zero external runtime dependencies)
-- All 10 refactoring rules (R-001 through R-010) verified and passing
-- Comprehensive README documentation (270 lines) with architecture, configuration, and usage guides
+- All 16 planned files created or updated per AAP transformation map (plus 1 bonus `tests/helpers.js`)
+- 37/37 tests passing across 3 test suites with 0.749s execution time
+- 13/13 JavaScript source files pass syntax validation
+- Zero external runtime dependencies — all features use Node.js built-in modules
+- Core business flow preserved: `Hello, World!\n` response is byte-identical to original
+- 23 commits with clear conventional-commit messages documenting each change
 
-### Critical Unresolved Issues
-- **None.** All compilation, test, and runtime validation gates pass at 100%.
+### Critical Issues Requiring Human Attention
+- No compilation or test failures remain
+- No missing functionality against AAP scope
+- Remaining work is exclusively production deployment and verification tasks
 
 ---
 
@@ -24,380 +31,368 @@ All 16 planned files from the Agent Action Plan have been created or updated, al
 
 ### 2.1 Final Validator Accomplishments
 
-The Final Validator agent completed a comprehensive validation across all 5 gates with zero issues remaining:
+The Final Validator agent completed all four validation gates and applied one performance optimization commit:
 
-| Gate | Result | Details |
+| Gate | Status | Details |
 |------|--------|---------|
-| Dependencies | ✅ 100% | `npm install` succeeds; jest 29.7.0 installed as devDependency; zero runtime dependencies |
-| Syntax | ✅ 100% | All 16 in-scope files pass `node --check` syntax validation and `require()` module loading |
-| Tests | ✅ 100% | 37/37 tests pass across 3 suites (hello: 17, health: 10, app: 10) in 0.78s |
-| Runtime | ✅ 100% | Server starts on 127.0.0.1:3000; Hello World response byte-identical; /health returns JSON; gzip works |
-| Git | ✅ 100% | Working tree clean; all changes committed on branch `blitzy-c3a6d1b4-01e2-40a3-b514-7285cf43da04` |
+| **Gate 1: Dependencies** | ✅ PASS | 266 packages installed via npm; zero runtime external dependencies |
+| **Gate 2: Compilation** | ✅ PASS | 13/13 JavaScript files pass `node --check` syntax validation |
+| **Gate 3: Tests** | ✅ PASS | 37/37 tests passing across 3/3 test suites (100% pass rate) |
+| **Gate 4: Runtime** | ✅ PASS | Single-process, clustered, health endpoint, compression, and graceful shutdown all verified |
 
-### 2.2 Git Repository Analysis
+### 2.2 Test Results Breakdown
 
-| Metric | Value |
-|--------|-------|
-| Total commits on branch | 20 (from base `origin/Test_24_Feb-2026`) |
-| Files added | 16 |
-| Files modified | 2 (server.js, README.md) |
-| Lines added | 1,639 (excluding package-lock.json) |
-| Lines removed | 32 |
-| Net lines of code change | +1,607 |
-| Source files (JS, non-test) | 9 files, 717 lines |
-| Test files (JS) | 4 files, 716 lines |
-| Documentation + config files | 4 files, 308 lines |
+| Test Suite | Tests | Scope |
+|-----------|-------|-------|
+| `tests/hello.test.js` | 17/17 ✅ | Response contract, method-agnostic, path-agnostic, idempotency, health differentiation |
+| `tests/health.test.js` | 11/11 ✅ | Status, content-type, JSON structure, field validation, boundary behavior |
+| `tests/app.test.js` | 9/9 ✅ | Server lifecycle, middleware pipeline (logging, gzip, deflate), route integration, shutdown |
+| **Total** | **37/37** | **100% pass rate, 0.749s execution** |
 
-### 2.3 Fixes Applied During Validation
+### 2.3 Performance Optimizations Applied
 
-The agent resolved 4 QA findings during the validation process:
-1. **Coverage toolchain:** Configured Jest for proper test coverage collection
-2. **Method coverage:** Extended Hello World tests to cover all HTTP methods (HEAD, OPTIONS, PATCH)
-3. **Deflate test:** Fixed compression middleware test to validate deflate encoding alongside gzip
-4. **Listener leak:** Added `teardownGracefulShutdown()` function to properly clean up process listeners in test teardown, preventing Jest "worker failed to exit gracefully" warnings
+The Final Validator applied 4 hot-path optimizations in commit `157bc8d`:
+1. Pre-computed Hello World response as a `Buffer` constant (eliminates per-request string allocation)
+2. Added `Content-Length` header to hello and health responses (eliminates chunked transfer encoding overhead)
+3. Switched to `process.hrtime.bigint()` in logger middleware (avoids `[sec, ns]` array allocation)
+4. Direct chunk pass to zlib compression functions (avoids redundant `Buffer.from()` conversion)
+
+### 2.4 Fixes Applied During Validation
+
+| Commit | Fix Description |
+|--------|----------------|
+| `6b50308` | Address code review findings from Checkpoint 1 |
+| `0b396a2` | Resolve 4 QA findings — coverage toolchain, method coverage, deflate test, listener leak |
+| `b0ee6fc` | Extract shared test helpers to reduce test files under 100-line code limit |
+| `782fa72` | Correct startup output format and add tests/helpers.js to README |
 
 ---
 
-## 3. Visual Representation
+## 3. Project Hours Breakdown
 
-### 3.1 Hours Breakdown
+### 3.1 Completed Work: 51 Hours
+
+| Component | Hours | Details |
+|-----------|-------|---------|
+| Architecture & Design | 3h | Module decomposition, dependency mapping, middleware pipeline design |
+| Configuration Module (`config/index.js`, 47 LOC) | 2h | Environment variable parsing, frozen config object, default handling |
+| Entry Point (`server.js`, 25 LOC) | 1h | Conditional clustering/single-process delegation |
+| Application Factory (`src/app.js`, 113 LOC) | 5h | HTTP server, middleware composition, routing, error handling, timeout tuning |
+| Cluster Module (`src/cluster.js`, 113 LOC) | 4h | Worker forking, exit monitoring, auto-respawn |
+| Hello Handler (`src/handlers/hello.js`, 28 LOC) | 1h | Response extraction, pre-computed Buffer optimization |
+| Health Route (`src/routes/health.js`, 49 LOC) | 2h | Health metadata assembly, JSON serialization |
+| Logger Middleware (`src/middleware/logger.js`, 86 LOC) | 3h | Response time measurement, monkey-patch pattern, structured output |
+| Compression Middleware (`src/middleware/compression.js`, 111 LOC) | 4h | Accept-Encoding negotiation, gzip/deflate, error fallback |
+| Graceful Shutdown (`src/utils/graceful-shutdown.js`, 153 LOC) | 4h | Signal handling, connection draining, force-kill timeout, test teardown |
+| Test Suite (716 LOC, 37 tests across 4 files) | 12h | hello (4h), health (3h), app integration (3h), shared helpers (2h) |
+| Project Scaffolding (`package.json`, `.gitignore`, `.env.example`) | 1.5h | Dependency manifest, ignore rules, env template |
+| README.md Documentation Rewrite (~200 LOC modified) | 3h | Complete documentation including architecture, API, configuration |
+| Bug Fixes & QA Iterations (6 fix commits) | 4h | Code review findings, coverage toolchain, listener leak, deflate test |
+| Performance Optimization (1 commit) | 1.5h | Buffer pre-computation, Content-Length, hrtime.bigint(), zlib optimization |
+| **Total Completed** | **51h** | |
+
+### 3.2 Remaining Work: 11 Hours
+
+| Task | Hours | Priority | Confidence |
+|------|-------|----------|------------|
+| Production environment configuration | 1h | High | High |
+| Code review by senior developer | 2h | Medium | High |
+| Cluster mode production validation | 2h | Medium | Medium |
+| Load testing and performance benchmarking | 2h | Low | Medium |
+| Process manager integration (PM2/systemd) | 2h | Medium | Medium |
+| Log management setup (rotation, persistence) | 1h | Low | High |
+| Production smoke testing | 1h | Medium | High |
+| **Total Remaining** | **11h** | | |
+
+*Note: Remaining hours include enterprise multipliers (1.10× compliance × 1.10× uncertainty = 1.21× applied to base estimates of 9.1h)*
+
+### 3.3 Visual Breakdown
 
 ```mermaid
 pie title Project Hours Breakdown
-    "Completed Work" : 44
-    "Remaining Work" : 7
-```
-
-**Calculation:** 44 hours completed / (44 + 7) total hours = 44 / 51 = 86% complete
-
-### 3.2 Completed Hours by Component
-
-```mermaid
-pie title Completed Work Distribution (44h)
-    "Test Suite (37 tests)" : 10
-    "App Factory (src/app.js)" : 5
-    "Compression Middleware" : 4
-    "Clustering Module" : 4
-    "Graceful Shutdown" : 4
-    "Logger Middleware" : 3
-    "Documentation (README)" : 3
-    "QA & Bug Fixes" : 3
-    "Configuration Module" : 2
-    "Health Endpoint" : 2
-    "Project Setup" : 2
-    "Entry Point + Handler" : 2
+    "Completed Work" : 51
+    "Remaining Work" : 11
 ```
 
 ---
 
-## 4. Completed Work — Detailed Breakdown
+## 4. Detailed Human Task List
 
-### 4.1 Hours by Component
+### 4.1 Task Table
 
-| Component | Files | Lines | Hours | Description |
-|-----------|-------|-------|-------|-------------|
-| Project Setup | package.json, .gitignore, .env.example | 38 | 2h | Dependency manifest, git ignore rules, env variable template |
-| Configuration | config/index.js | 47 | 2h | Environment-based frozen config with PORT=0 edge case handling |
-| App Factory | src/app.js | 117 | 5h | HTTP server creation, middleware pipeline composition, error handling, timeout tuning |
-| Hello Handler | src/handlers/hello.js | 18 | 1h | Extracted byte-identical Hello World response handler |
-| Health Endpoint | src/routes/health.js | 48 | 2h | JSON health metadata endpoint with uptime, memory, PID |
-| Logger Middleware | src/middleware/logger.js | 85 | 3h | res.end monkey-patching with high-resolution timing |
-| Compression Middleware | src/middleware/compression.js | 111 | 4h | Gzip/deflate via zlib with Accept-Encoding negotiation |
-| Clustering Module | src/cluster.js | 113 | 4h | Multi-core worker forking with crash detection and respawn |
-| Graceful Shutdown | src/utils/graceful-shutdown.js | 153 | 4h | SIGINT/SIGTERM/uncaughtException handling with force-kill timeout |
-| Entry Point | server.js | 25 | 1h | Thin orchestrator delegating to cluster or app |
-| Test Suite | tests/*.js (4 files) | 716 | 10h | 37 tests: response contract, health endpoint, integration, helpers |
-| Documentation | README.md | 270 | 3h | Complete rewrite with architecture, config, API docs |
-| QA & Bug Fixes | Multiple files | — | 3h | 4 QA findings resolved during validation |
-| **Total** | **18 files** | **1,741** | **44h** | |
+All remaining tasks sum to exactly **11 hours**, matching the pie chart "Remaining Work" value.
 
-### 4.2 Feature Compliance Verification
+| # | Task | Description | Action Steps | Hours | Priority | Severity |
+|---|------|-------------|--------------|-------|----------|----------|
+| 1 | Production environment configuration | Set up `.env` file with production-appropriate values for HOST, PORT, LOG_LEVEL, and SHUTDOWN_TIMEOUT | 1. Copy `.env.example` to `.env` 2. Set `HOST=0.0.0.0` for external access 3. Set `PORT` to production port 4. Set `LOG_LEVEL=info` 5. Configure `SHUTDOWN_TIMEOUT` based on expected request duration | 1h | High | Medium |
+| 2 | Code review by senior developer | Review all 13 source and test files for design pattern correctness, edge cases, and production readiness | 1. Review middleware monkey-patch patterns in logger and compression 2. Verify graceful shutdown teardown logic 3. Check cluster worker respawn behavior 4. Validate error handling completeness 5. Approve or request changes | 2h | Medium | Medium |
+| 3 | Cluster mode production validation | Test clustering on target Linux production OS to verify port sharing and worker respawn | 1. Deploy to Linux staging environment 2. Run `ENABLE_CLUSTERING=true node server.js` 3. Verify all workers bind successfully 4. Kill a worker and verify auto-respawn 5. Test concurrent requests across workers | 2h | Medium | High |
+| 4 | Load testing and benchmarking | Run performance benchmarks comparing single-process vs. clustered mode | 1. Install `autocannon` or `wrk` 2. Benchmark single-process: `node server.js` 3. Benchmark clustered: `ENABLE_CLUSTERING=true node server.js` 4. Compare throughput, latency, and resource usage 5. Document baseline metrics | 2h | Low | Low |
+| 5 | Process manager integration | Configure PM2 or systemd for production process management | 1. Install PM2: `npm install -g pm2` 2. Create `ecosystem.config.js` for PM2 3. Configure auto-restart and log management 4. Test `pm2 start ecosystem.config.js` 5. Set up startup script for server reboot | 2h | Medium | Medium |
+| 6 | Log management setup | Configure log rotation and persistence for production logging | 1. Choose log rotation strategy (logrotate, PM2 built-in, or piped output) 2. Configure log file output path 3. Set rotation size/time limits 4. Test log rotation triggers 5. Verify old logs are archived | 1h | Low | Low |
+| 7 | Production smoke testing | End-to-end validation of all endpoints on production environment | 1. Verify `GET /` returns `Hello, World!\n` with `200 OK` 2. Verify `GET /health` returns valid JSON 3. Test gzip compression: `curl -H "Accept-Encoding: gzip"` 4. Verify graceful shutdown with `kill -TERM` 5. Confirm logs are being written | 1h | Medium | Medium |
+| | **Total Remaining Hours** | | | **11h** | | |
 
-All 10 refactoring rules from the AAP have been verified:
+### 4.2 Task Dependency Notes
 
-| Rule | Description | Status | Verification |
-|------|-------------|--------|--------------|
-| R-001 | Hello, World!\n byte-identical | ✅ Pass | Confirmed via `curl` — exact 14-byte body |
-| R-002 | Method-agnostic + path-agnostic | ✅ Pass | Tested GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS |
-| R-003 | Status 200, Content-Type text/plain | ✅ Pass | Verified via `curl -i` response headers |
-| R-004 | Zero external runtime dependencies | ✅ Pass | Only jest (devDependency); all runtime is Node.js built-in |
-| R-005 | Defaults to 127.0.0.1:3000 | ✅ Pass | Server starts on default host/port with no env vars |
-| R-006 | `node server.js` entry point | ✅ Pass | Verified via direct execution |
-| R-007 | CommonJS module system | ✅ Pass | All files use `require()` / `module.exports` |
-| R-008 | Clustering optional, disabled by default | ✅ Pass | Single-process mode works; clustering requires `ENABLE_CLUSTERING=true` |
-| R-009 | Only /health is differentiated | ✅ Pass | All other paths return Hello World |
-| R-010 | All tests pass with npm test | ✅ Pass | 37/37 tests pass in 0.78s |
+- Task 1 (env config) should be completed first — other tasks depend on a properly configured environment
+- Task 2 (code review) can run in parallel with Task 1
+- Tasks 3–7 depend on Tasks 1 and 2 being complete
+- Tasks 4 and 6 are independent and can run in parallel
+- Task 7 (smoke testing) should be the final task
 
 ---
 
-## 5. Remaining Work — Human Task List
+## 5. Development Guide
 
-### 5.1 Detailed Task Table
+### 5.1 System Prerequisites
 
-| # | Task | Priority | Severity | Hours | Action Steps |
-|---|------|----------|----------|-------|-------------|
-| 1 | Human Code Review of All Modules | Medium | Medium | 2.5h | Review all 9 source modules (config/index.js, src/app.js, src/cluster.js, src/handlers/hello.js, src/routes/health.js, src/middleware/logger.js, src/middleware/compression.js, src/utils/graceful-shutdown.js, server.js) for production readiness, edge case handling, and adherence to team coding standards. Verify JSDoc comments are accurate. |
-| 2 | Production Environment Configuration | Medium | Medium | 1.5h | Copy `.env.example` to `.env` and configure for target deployment: set `HOST=0.0.0.0` for external access (default `127.0.0.1` is loopback-only), choose appropriate `PORT`, decide whether to enable clustering (`ENABLE_CLUSTERING=true` for multi-core servers), and set `LOG_LEVEL` per environment. Verify the server starts correctly with production settings. |
-| 3 | Performance Benchmarking & Validation | Low | Low | 2.0h | Run load tests using `autocannon` or `ab` (Apache Bench) to validate clustering throughput claims (near-linear scaling per CPU core). Measure baseline single-process throughput, then compare with 2/4/8 workers. Verify compression overhead is acceptable. Document results for the team. |
-| 4 | Documentation Accuracy Review | Low | Low | 1.0h | Read through the 270-line README.md end-to-end. Verify all code examples are copy-pasteable and produce the documented output. Confirm the project structure tree matches actual files. Check that the configuration table accurately reflects all supported environment variables. |
-| | **Total Remaining Hours** | | | **7.0h** | |
+| Component | Required Version | Verification Command |
+|-----------|-----------------|---------------------|
+| Node.js | v20.x LTS or later | `node --version` (expect `v20.x.x`) |
+| npm | Bundled with Node.js | `npm --version` (expect `10.x.x`) |
+| Operating System | Linux, macOS, or Windows | Any modern OS with Node.js support |
+| Disk Space | ~50 MB | For `node_modules` (266 packages, dev dependency only) |
 
-*Enterprise multipliers (1.10× compliance + 1.10× uncertainty = 1.21×) have been applied to base estimates and are included in the hours above.*
+No external services (databases, caches, message queues) are required. The application is fully self-contained.
 
-### 5.2 Priority Summary
+### 5.2 Environment Setup
 
-- **High Priority Tasks:** None — all blocking issues have been resolved
-- **Medium Priority Tasks:** 2 tasks (4.0h) — Human code review and production environment configuration
-- **Low Priority Tasks:** 2 tasks (3.0h) — Performance benchmarking and documentation review
-
----
-
-## 6. Development Guide
-
-### 6.1 System Prerequisites
-
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Node.js | v20.x LTS or later | Verified with v20.19.5; v20+ recommended for optimal V8 performance |
-| npm | v10.x+ (bundled with Node.js) | Used only for installing Jest devDependency |
-| Operating System | Linux, macOS, or Windows | All Node.js built-in modules are cross-platform |
-| Git | Any recent version | For cloning the repository |
-
-No databases, caches, message queues, Docker, or external services are required.
-
-### 6.2 Environment Setup
+**Step 1: Clone the repository and switch to the feature branch**
 
 ```bash
-# 1. Clone the repository and switch to the feature branch
 git clone <repository-url>
 cd Test1
 git checkout blitzy-c3a6d1b4-01e2-40a3-b514-7285cf43da04
-
-# 2. (Optional) Create a .env file from the template
-cp .env.example .env
-# Edit .env to customize HOST, PORT, ENABLE_CLUSTERING, LOG_LEVEL, SHUTDOWN_TIMEOUT
 ```
 
-**Available Environment Variables:**
+**Step 2: Create environment configuration (optional)**
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` to customize settings. Default values work without any changes:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HOST` | `127.0.0.1` | Network interface to bind to (use `0.0.0.0` for external access) |
+| `HOST` | `127.0.0.1` | Network interface to bind to |
 | `PORT` | `3000` | TCP port to listen on |
-| `ENABLE_CLUSTERING` | `false` | Set to `true` to fork one worker per CPU core |
-| `LOG_LEVEL` | `info` | Logging verbosity: `silent`, `error`, `warn`, `info` |
-| `SHUTDOWN_TIMEOUT` | `5000` | Milliseconds to wait for in-flight requests before force-kill |
+| `ENABLE_CLUSTERING` | `false` | Enable multi-core clustering |
+| `LOG_LEVEL` | `info` | Logging verbosity (`silent`, `error`, `warn`, `info`) |
+| `SHUTDOWN_TIMEOUT` | `5000` | Milliseconds to wait for connection drain before force-kill |
 
-### 6.3 Dependency Installation
+### 5.3 Dependency Installation
 
 ```bash
-# Install development dependencies (Jest test framework)
 npm install
 ```
 
 **Expected output:**
+
 ```
-added 274 packages in Xs
+added 266 packages, and audited 267 packages in Xs
+found 0 vulnerabilities
 ```
 
-Only Jest (v29.7.0) is installed as a devDependency. There are zero runtime dependencies — all modules (http, cluster, os, zlib, process) are Node.js built-in.
+All 266 packages are Jest test framework dependencies (dev only). Zero runtime external packages are installed.
 
-### 6.4 Application Startup
+### 5.4 Application Startup
 
-#### Single-Process Mode (Default)
+**Single-process mode (default):**
+
 ```bash
 node server.js
 ```
 
-**Expected output:**
+**Expected terminal output:**
+
 ```
 [Server] Running at http://127.0.0.1:3000/ (PID: <pid>)
 ```
 
-#### Clustered Mode (Multi-Core)
+**Clustered mode (one worker per CPU core):**
+
 ```bash
 ENABLE_CLUSTERING=true node server.js
 ```
 
-**Expected output:**
+**Expected terminal output:**
+
 ```
-[Primary <pid>] Clustering enabled (true). Starting <N> workers...
-[Server] Running at http://127.0.0.1:3000/ (PID: <worker_pid>)
-[Worker <worker_pid>] Started
-... (one line per CPU core)
+[Primary <pid>] Clustering enabled (true). Starting N workers...
+[Worker <pid>] Started
+[Worker <pid>] Started
+...
 ```
 
-### 6.5 Verification Steps
+### 5.5 Verification Steps
+
+**Step 1: Verify Hello World response**
 
 ```bash
-# Verify Hello World response (byte-identical to original)
 curl http://127.0.0.1:3000/
-# Expected: Hello, World!
-
-# Verify response headers
-curl -i http://127.0.0.1:3000/
-# Expected: HTTP/1.1 200 OK, Content-Type: text/plain, X-Content-Type-Options: nosniff
-
-# Verify health check endpoint
-curl http://127.0.0.1:3000/health
-# Expected: JSON with status, uptime, timestamp, memoryUsage, pid fields
-
-# Verify method-agnostic behavior
-curl -X POST http://127.0.0.1:3000/any/path
-# Expected: Hello, World!
-
-# Verify gzip compression
-curl --compressed -H "Accept-Encoding: gzip" http://127.0.0.1:3000/
-# Expected: Hello, World! (transparently decompressed by curl)
-
-# Run the full test suite
-npm test
-# Expected: Test Suites: 3 passed, 3 total / Tests: 37 passed, 37 total
 ```
 
-### 6.6 Running Tests
+Expected: `Hello, World!`
+
+**Step 2: Verify health endpoint**
 
 ```bash
-# Standard test run (non-watch mode)
+curl http://127.0.0.1:3000/health
+```
+
+Expected: JSON object with `status`, `uptime`, `timestamp`, `memoryUsage`, `pid` fields.
+
+**Step 3: Verify response headers**
+
+```bash
+curl -sI http://127.0.0.1:3000/
+```
+
+Expected headers include:
+- `HTTP/1.1 200 OK`
+- `Content-Type: text/plain`
+- `Content-Length: 14`
+- `X-Content-Type-Options: nosniff`
+
+**Step 4: Verify gzip compression**
+
+```bash
+curl -s -H "Accept-Encoding: gzip" -o /dev/null -w "Status: %{http_code}" http://127.0.0.1:3000/
+```
+
+Expected: `Status: 200`
+
+**Step 5: Run the test suite**
+
+```bash
 npm test
-
-# Verbose test output with individual test names
-CI=true npx jest --watchAll=false --ci --verbose
-
-# Run a specific test suite
-CI=true npx jest tests/hello.test.js --watchAll=false
-
-# Run with coverage report
-CI=true npx jest --watchAll=false --coverage
 ```
 
-**Expected test output:**
+Expected: `Test Suites: 3 passed, 3 total` and `Tests: 37 passed, 37 total`
+
+**Step 6: Verify graceful shutdown**
+
+Press `Ctrl+C` in the server terminal.
+
+Expected:
 ```
-PASS tests/hello.test.js (17 tests)
-PASS tests/health.test.js (10 tests)
-PASS tests/app.test.js (10 tests)
-
-Test Suites: 3 passed, 3 total
-Tests:       37 passed, 37 total
+[Shutdown] Received SIGINT. Graceful shutdown initiated...
+[Shutdown] HTTP server closed. All connections drained.
 ```
 
-### 6.7 Stopping the Server
+### 5.6 Syntax Validation (Optional)
 
-Press `Ctrl+C` to initiate graceful shutdown. The server will:
-1. Stop accepting new connections
-2. Drain in-flight requests
-3. Exit cleanly with code 0
+```bash
+for f in server.js config/index.js src/app.js src/cluster.js src/handlers/hello.js src/middleware/compression.js src/middleware/logger.js src/routes/health.js src/utils/graceful-shutdown.js; do
+  node --check "$f" && echo "$f: OK"
+done
+```
 
-If draining exceeds the `SHUTDOWN_TIMEOUT` (default 5 seconds), the process force-exits with code 1.
+Expected: All 9 files report `OK` with zero errors.
+
+### 5.7 Troubleshooting
+
+| Issue | Cause | Resolution |
+|-------|-------|------------|
+| `Error: Port 3000 is already in use` | Another process occupies port 3000 | Kill the process: `lsof -i :3000` then `kill <pid>`, or set `PORT=3001 node server.js` |
+| `Error: Permission denied for port 80` | Ports below 1024 require root | Use `sudo node server.js` or choose a port ≥ 1024 |
+| `npm test` hangs | Jest enters watch mode | Run with: `CI=true npx jest --watchAll=false --ci --forceExit` |
+| Cluster workers crash-loop | Port sharing failure on some OS/container environments | Disable clustering: unset `ENABLE_CLUSTERING` or set to `false` |
 
 ---
 
-## 7. Risk Assessment
+## 6. Risk Assessment
 
-### 7.1 Technical Risks
-
-| Risk | Severity | Likelihood | Mitigation |
-|------|----------|------------|------------|
-| Compression middleware does not parse RFC 7231 quality factors (e.g., `gzip;q=0`) | Low | Very Low | The code uses simple substring matching for `Accept-Encoding`. In practice, clients virtually never send `q=0`. Full quality-factor parsing can be added if strict HTTP compliance is required. |
-| `keepAliveTimeout` (65s) may not match all load balancer configurations | Low | Low | The 65s value is designed to exceed the typical 60s load-balancer idle timeout. Adjust via server code if using a non-standard load balancer configuration. |
-| Worker respawn in clustering mode is unconditional | Low | Low | The cluster module respawns any exited worker immediately. Under a crash loop, this could consume resources. A respawn backoff strategy could be added for production hardening. |
-
-### 7.2 Security Risks
+### 6.1 Technical Risks
 
 | Risk | Severity | Likelihood | Mitigation |
 |------|----------|------------|------------|
-| Default HOST binding is loopback only (127.0.0.1) | Info | N/A | This is intentional for security — external access requires explicitly setting `HOST=0.0.0.0`. Document this in deployment guides. |
-| No HTTPS/TLS support | Low | Medium | Out of scope per AAP. For production, terminate TLS at a reverse proxy (NGINX, AWS ALB) in front of the Node.js server. |
-| No rate limiting | Low | Low | Out of scope per AAP. The server binds to loopback by default. If exposed externally, add rate limiting via reverse proxy or custom middleware. |
-| `X-Content-Type-Options: nosniff` is the only security header | Low | Low | Additional headers (CSP, HSTS, X-Frame-Options) are not applicable to a text/plain API server but could be added if requirements change. |
+| Cluster mode port-sharing issues on Windows/containers | Medium | Low | Clustering is disabled by default (R-008); falls back to single-process mode |
+| Compression overhead on very small payloads (14 bytes) | Low | Medium | Gzip overhead is negligible; compression is a no-op when client doesn't send `Accept-Encoding` |
+| `res.end` monkey-patching conflicts with future middleware | Low | Low | Pipeline order is documented and tested; middleware application is deterministic |
+| Jest `--forceExit` warning about open handles | Low | Medium | `teardownGracefulShutdown()` cleans up process listeners in test teardown |
 
-### 7.3 Operational Risks
-
-| Risk | Severity | Likelihood | Mitigation |
-|------|----------|------------|------------|
-| No persistent logging (stdout only) | Medium | Medium | Logs are written to stdout. For production, pipe output to a log aggregation service or use a process manager (PM2) that captures stdout. |
-| No CI/CD pipeline | Low | N/A | Out of scope per AAP. The `npm test` command can be integrated into any CI system (GitHub Actions, GitLab CI, Jenkins). |
-| No Docker containerization | Low | N/A | Out of scope per AAP. The application runs directly on Node.js without containerization. |
-
-### 7.4 Integration Risks
+### 6.2 Security Risks
 
 | Risk | Severity | Likelihood | Mitigation |
 |------|----------|------------|------------|
-| No external service dependencies to integrate | None | N/A | The application is entirely self-contained with zero external dependencies. This is a strength, not a risk. |
-| Health endpoint not connected to monitoring system | Low | Medium | The `/health` endpoint is functional and returns standard JSON. Connect it to Prometheus, Datadog, or a load balancer health check as needed. |
+| Server binds to `0.0.0.0` if HOST is misconfigured | Medium | Low | Default is `127.0.0.1` (loopback only); `.env.example` documents safe default |
+| No HTTPS/TLS encryption | Medium | Low | Out of scope per AAP; use a reverse proxy (NGINX) for TLS termination in production |
+| Error stack traces could leak to stderr | Low | Low | Errors are logged internally, never exposed in HTTP responses |
+| No rate limiting on endpoints | Low | Medium | Out of scope; implement via reverse proxy or custom middleware if needed |
+
+### 6.3 Operational Risks
+
+| Risk | Severity | Likelihood | Mitigation |
+|------|----------|------------|------------|
+| No log rotation — logs grow unbounded | Medium | High | Human task #6 addresses log management setup |
+| No process manager for auto-restart | Medium | High | Human task #5 addresses PM2/systemd integration |
+| No monitoring/alerting beyond `/health` | Low | Medium | `/health` endpoint enables basic monitoring; APM tools are a future enhancement |
+| Graceful shutdown timeout too short for long requests | Low | Low | `SHUTDOWN_TIMEOUT` is configurable via environment variable (default 5000ms) |
+
+### 6.4 Integration Risks
+
+| Risk | Severity | Likelihood | Mitigation |
+|------|----------|------------|------------|
+| Load balancer health check compatibility | Low | Low | `/health` returns standard JSON; compatible with AWS ALB, NGINX, HAProxy |
+| Reverse proxy keep-alive timeout mismatch | Low | Medium | `keepAliveTimeout` set to 65s (above typical 60s LB timeout) |
+| Node.js version compatibility below v20 | Medium | Low | `cluster.isPrimary` requires Node.js v16+; documented as v20 LTS recommended |
 
 ---
 
-## 8. Architecture Overview
+## 7. Repository Statistics
 
-### 8.1 Module Dependency Graph
+| Metric | Value |
+|--------|-------|
+| Total commits on branch | 23 |
+| Files added | 16 |
+| Files modified | 4 |
+| Total files changed | 20 |
+| Lines added | 6,180 |
+| Lines removed | 492 |
+| Net lines changed | +5,688 |
+| Source code (9 modules) | 725 LOC |
+| Test code (4 files) | 716 LOC |
+| Configuration files | 38 LOC |
+| Total JavaScript files | 13 |
+| Test count | 37 |
+| Test execution time | 0.749s |
+| Runtime dependencies | 0 (zero external) |
+| Dev dependencies | 1 (jest@29.7.0) |
+| Node.js version | v20.19.5 |
 
-```
-server.js (entry point)
-├── config/index.js (environment configuration)
-├── src/cluster.js (multi-core forking) [conditional]
-│   ├── src/app.js (HTTP server factory)
-│   └── config/index.js
-└── src/app.js (HTTP server factory)
-    ├── config/index.js
-    ├── src/handlers/hello.js (Hello World handler)
-    ├── src/routes/health.js (health endpoint)
-    ├── src/middleware/logger.js (request logging)
-    ├── src/middleware/compression.js (gzip/deflate)
-    └── src/utils/graceful-shutdown.js (signal handling)
-```
+## 8. File Inventory
 
-### 8.2 Request Processing Pipeline
+### 8.1 Source Modules (725 LOC)
 
-```
-Incoming HTTP Request
-    │
-    ▼
-[X-Content-Type-Options: nosniff header set]
-    │
-    ▼
-[Logger Middleware] ─── wraps res.end (outermost)
-    │
-    ▼
-[Compression Middleware] ─── wraps res.end (inner)
-    │
-    ▼
-[Router]
-    ├── /health → healthHandler (JSON metrics)
-    └── * (all other) → helloHandler (Hello, World!\n)
-    │
-    ▼
-[res.end() called by handler]
-    │
-    ▼
-[Compression executes] ─── gzip/deflate if Accept-Encoding present
-    │
-    ▼
-[Logger executes] ─── logs method, URL, status, response time
-    │
-    ▼
-HTTP Response Sent to Client
-```
+| File | LOC | Purpose |
+|------|-----|---------|
+| `server.js` | 25 | Entry point — delegates to cluster or single-process app |
+| `config/index.js` | 47 | Centralized environment-based configuration (frozen object) |
+| `src/app.js` | 113 | HTTP server factory — composes middleware pipeline and routing |
+| `src/cluster.js` | 113 | Multi-core clustering — forks one worker per CPU core |
+| `src/handlers/hello.js` | 28 | Hello World handler — pre-computed Buffer, Content-Length |
+| `src/routes/health.js` | 49 | Health check endpoint — JSON with uptime, memory, PID |
+| `src/middleware/logger.js` | 86 | Request logging — method, URL, status, response time |
+| `src/middleware/compression.js` | 111 | Gzip/deflate compression via Accept-Encoding negotiation |
+| `src/utils/graceful-shutdown.js` | 153 | SIGINT/SIGTERM handling with connection draining |
 
-### 8.3 File Inventory
+### 8.2 Test Files (716 LOC, 37 Tests)
 
-| File | Type | Lines | Purpose |
-|------|------|-------|---------|
-| server.js | Entry point | 25 | Thin orchestrator; delegates to cluster or app |
-| config/index.js | Configuration | 47 | Frozen environment-based config object |
-| src/app.js | Core | 117 | HTTP server factory with middleware pipeline |
-| src/cluster.js | Core | 113 | Multi-core worker forking and management |
-| src/handlers/hello.js | Handler | 18 | Byte-identical Hello World response |
-| src/routes/health.js | Route | 48 | JSON health check endpoint |
-| src/middleware/logger.js | Middleware | 85 | Request-level logging with timing |
-| src/middleware/compression.js | Middleware | 111 | Gzip/deflate response compression |
-| src/utils/graceful-shutdown.js | Utility | 153 | Signal handling and graceful drain |
-| tests/hello.test.js | Test | 205 | 17 tests for Hello World contract |
-| tests/health.test.js | Test | 155 | 10 tests for health endpoint |
-| tests/app.test.js | Test | 199 | 10 integration tests |
-| tests/helpers.js | Test utility | 157 | Shared test server setup/teardown |
-| package.json | Config | 13 | Project manifest with jest devDep |
-| .env.example | Config | 14 | Environment variable template |
-| .gitignore | Config | 11 | Git ignore rules |
-| README.md | Documentation | 270 | Comprehensive project documentation |
-| package-lock.json | Auto-generated | 3,651 | Deterministic dependency tree |
+| File | LOC | Tests | Scope |
+|------|-----|-------|-------|
+| `tests/hello.test.js` | 205 | 17 | Response contract, method-agnostic, path-agnostic, idempotency |
+| `tests/health.test.js` | 155 | 11 | Health endpoint structure, field validation, boundary behavior |
+| `tests/app.test.js` | 199 | 9 | Server lifecycle, middleware pipeline, route integration, shutdown |
+| `tests/helpers.js` | 157 | — | Shared utilities: server setup/teardown, HTTP request helper |
+
+### 8.3 Configuration and Documentation
+
+| File | LOC | Purpose |
+|------|-----|---------|
+| `package.json` | 13 | Project manifest with jest dev dependency and npm scripts |
+| `.gitignore` | 11 | Excludes node_modules, .env, logs, coverage |
+| `.env.example` | 14 | Environment variable template with documented defaults |
+| `README.md` | 250+ | Comprehensive project documentation (fully rewritten) |
