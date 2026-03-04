@@ -1,0 +1,28 @@
+{
+  "name": "test1",
+  "version": "1.0.0",
+  "description": "A minimal Node.js HTTP server with a Staging-Approval Workflow for controlled promotion of features from prototype to production. Built with zero external dependencies using only Node.js built-in modules.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/router.test.js && node tests/requirementStore.test.js && node tests/requirementsController.test.js && node tests/stagingController.test.js && node tests/approvalController.test.js && node tests/integration/workflow.test.js"
+  },
+  "engines": {
+    "node": ">=4.0.0"
+  },
+  "keywords": [
+    "http-server",
+    "staging-workflow",
+    "approval-pipeline",
+    "nodejs",
+    "zero-dependencies"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ajitblitzy/Test1.git"
+  }
+}

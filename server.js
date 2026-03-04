@@ -1,14 +1,15 @@
 const http = require('http');
+const router = require('./src/router');
+const config = require('./src/config');
 
-const hostname = '127.0.0.1';
-const port = 3000;
+const hostname = config.hostname;
+const port = config.port;
 
 const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello, World!\n');
+  router.handle(req, res);
 });
 
 server.listen(port, hostname, () => {
   console.log(`Server running at http://${hostname}:${port}/`);
+  console.log('Staging-approval workflow is active');
 });
