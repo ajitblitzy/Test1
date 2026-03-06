@@ -1,14 +1,16 @@
-const http = require('http');
+'use strict';
 
-const hostname = '127.0.0.1';
-const port = 3000;
+/**
+ * Application Entry Point
+ *
+ * Thin bootstrapper that delegates all application logic to the src/ layer.
+ * This file's sole responsibility is to import and invoke the startServer()
+ * function from src/app.js, which composes the HTTP server with middleware,
+ * binds to the configured host/port, and registers graceful shutdown handlers.
+ *
+ * Startup command: node server.js
+ */
 
-const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello, World!\n');
-});
+const { startServer } = require('./src/app');
 
-server.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
-});
+startServer();
