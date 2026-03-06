@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+
+# Test coverage output
+coverage/
+
+# Log files
+*.log
