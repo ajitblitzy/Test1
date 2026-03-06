@@ -1,12 +1,12 @@
 # Test1
 
-A minimal, single-file Node.js HTTP server that responds with "Hello, World!" to every incoming request. Built using the Node.js built-in `http` module with zero external dependencies.
+A production-grade Node.js HTTP server built with Clean Architecture principles. Responds with "Hello, World!" to every incoming request. Built using only Node.js built-in modules with zero external dependencies.
 
 ## Prerequisites
 
-- **Node.js** v4.x or later is required (the server uses ES6 features including `const`, arrow functions, and template literals)
-- No npm packages are needed — this project has no `package.json` and no external dependencies
-- No build tools or compilation steps are required
+- **Node.js** v18.0.0 or later (v20+ recommended for the built-in test runner)
+- **npm** is included with Node.js and is used for running project scripts
+- Zero external dependencies — `package.json` exists for project metadata, scripts, and engine constraints only
 
 ## Getting Started
 
@@ -17,13 +17,35 @@ A minimal, single-file Node.js HTTP server that responds with "Hello, World!" to
    cd Test1
    ```
 
-2. **Start the server:**
+2. **Install (optional — no external dependencies to fetch, but establishes the project pattern):**
+
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment (optional):**
+
+   Copy the environment variable template and adjust values as needed:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   See [Environment Variables](#environment-variables) for available options.
+
+4. **Start the server:**
+
+   ```bash
+   npm start
+   ```
+
+   Or run directly:
 
    ```bash
    node server.js
    ```
 
-3. **Expected terminal output:**
+5. **Expected terminal output:**
 
    ```
    Server running at http://127.0.0.1:3000/
@@ -34,6 +56,12 @@ The server is now running and ready to accept HTTP requests.
 ## Usage
 
 ### Starting the Server
+
+```bash
+npm start
+```
+
+Or equivalently:
 
 ```bash
 node server.js
@@ -55,21 +83,39 @@ Hello, World!
 
 Open [http://127.0.0.1:3000/](http://127.0.0.1:3000/) in any web browser to see the "Hello, World!" response.
 
+### Custom Host and Port
+
+Override the default bind address and port using environment variables:
+
+```bash
+HOST=0.0.0.0 PORT=8080 node server.js
+```
+
 ## Configuration
 
-The server configuration is defined as hardcoded constants in `server.js` (lines 3–4):
+Server configuration is managed through environment variables with sensible defaults. No code changes are needed to customize the server for different environments.
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| Hostname | `127.0.0.1` | Loopback interface — accepts connections from the local machine only |
-| Port | `3000` | TCP port the server listens on |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HOST` | `127.0.0.1` | Server bind address (loopback by default — local connections only) |
+| `PORT` | `3000` | TCP port the server listens on |
+| `NODE_ENV` | `development` | Runtime environment (`development`, `production`, `test`) |
 
-To change the hostname or port, edit the corresponding constant values directly in `server.js`:
+A `.env.example` file is provided as a configuration template. Copy it to `.env` to set values locally:
 
-```javascript
-const hostname = '127.0.0.1'; // Change to '0.0.0.0' to accept external connections
-const port = 3000;             // Change to any available port number
+```bash
+cp .env.example .env
 ```
+
+## Environment Variables
+
+All configuration is externalized via environment variables, following the [Twelve-Factor App](https://12factor.net/config) methodology. Defaults match the original hardcoded values so the server works identically out of the box.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HOST` | `127.0.0.1` | The hostname or IP address the server binds to. Set to `0.0.0.0` to accept connections from all network interfaces. |
+| `PORT` | `3000` | The TCP port number the server listens on. Must be a valid port (1–65535). |
+| `NODE_ENV` | `development` | The runtime environment. Affects logging verbosity and behavior. |
 
 ## API Behavior
 
@@ -82,6 +128,8 @@ The server responds identically to **all** HTTP requests regardless of method (G
 | Status Code | `200 OK` |
 | Header | `Content-Type: text/plain` |
 | Body | `Hello, World!\n` |
+
+> **Note:** Responses also include security headers (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Strict-Transport-Security`, `Content-Security-Policy`) set by the security middleware. The `X-Powered-By` header is removed.
 
 ### Example Request and Response
 
@@ -97,6 +145,8 @@ Host: 127.0.0.1:3000
 ```
 HTTP/1.1 200 OK
 Content-Type: text/plain
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
 
 Hello, World!
 ```
@@ -112,9 +162,113 @@ curl -X POST http://127.0.0.1:3000/any/path
 
 ```
 Test1/
-├── server.js    # Node.js HTTP server (main application)
-└── README.md    # Project documentation
+├── server.js                        (thin entry point — bootstraps app)
+├── package.json                     (dependency manifest, scripts, engine constraints)
+├── .env.example                     (environment variable template)
+├── .gitignore                       (exclusion patterns)
+├── .nvmrc                           (Node.js version pin)
+├── README.md                        (this file)
+├── src/
+│   ├── app.js                       (application factory — composes server with middleware and handler)
+│   ├── server.js                    (HTTP server creation and binding logic)
+│   ├── config/
+│   │   └── index.js                 (centralized configuration)
+│   ├── handlers/
+│   │   └── helloHandler.js          (extracted request handler)
+│   ├── middleware/
+│   │   ├── requestLogger.js         (request/response logging)
+│   │   ├── securityHeaders.js       (security HTTP response headers)
+│   │   └── errorHandler.js          (error handling)
+│   └── utils/
+│       ├── logger.js                (structured logging utility)
+│       └── gracefulShutdown.js      (graceful shutdown handler)
+├── tests/
+│   ├── unit/
+│   │   ├── handlers/
+│   │   │   └── helloHandler.test.js
+│   │   ├── middleware/
+│   │   │   ├── requestLogger.test.js
+│   │   │   ├── securityHeaders.test.js
+│   │   │   └── errorHandler.test.js
+│   │   ├── config/
+│   │   │   └── config.test.js
+│   │   └── utils/
+│   │       └── logger.test.js
+│   └── integration/
+│       └── server.test.js
+└── blitzy/
+    └── documentation/
+        ├── Project Guide.md
+        └── Technical Specifications.md
 ```
 
-- **`server.js`** — The entire application. Creates an HTTP server using the Node.js built-in `http` module, binds to `127.0.0.1:3000`, and responds to all requests with a plain-text "Hello, World!" message.
-- **`README.md`** — This documentation file.
+### Directory Descriptions
+
+| Directory / File | Description |
+|-----------------|-------------|
+| `server.js` | Thin entry point that imports and starts the application. Run with `node server.js`. |
+| `src/` | All application source code, organized by concern. |
+| `src/app.js` | Application factory — composes the HTTP server with the middleware pipeline and request handler. Exports `createApp()` and `startServer()` for testability. |
+| `src/server.js` | HTTP server creation and port binding logic. Includes error listeners for `EADDRINUSE` and other startup failures. |
+| `src/config/` | Centralized configuration module. Reads environment variables with fallback defaults. |
+| `src/handlers/` | Request handler functions. `helloHandler.js` contains the extracted Hello World response logic. |
+| `src/middleware/` | Middleware modules composed into a pipeline: security headers, request logging, and error handling. |
+| `src/utils/` | Utility modules — structured logger and graceful shutdown handler. |
+| `tests/` | All test files, organized into `unit/` and `integration/` subdirectories. |
+| `blitzy/` | Blitzy platform documentation artifacts (historical — not modified by the refactoring). |
+
+## Testing
+
+Tests use the **Node.js built-in test runner** (`node:test`) and assertion module (`node:assert`). No external test framework is required.
+
+> **Note:** The built-in test runner requires Node.js v20 or later.
+
+### Running Tests
+
+```bash
+npm test
+```
+
+This executes all test files matching `tests/**/*.test.js`.
+
+### Test Structure
+
+- **Unit tests** (`tests/unit/`) — Test individual modules in isolation:
+  - `handlers/helloHandler.test.js` — Validates response status, headers, and body
+  - `middleware/requestLogger.test.js` — Verifies request logging output
+  - `middleware/securityHeaders.test.js` — Confirms all security headers are set
+  - `middleware/errorHandler.test.js` — Tests error responses and stack trace suppression
+  - `config/config.test.js` — Tests environment variable reading, defaults, and immutability
+  - `utils/logger.test.js` — Tests log output format, levels, and timestamps
+
+- **Integration tests** (`tests/integration/`) — Test the full HTTP request/response cycle:
+  - `server.test.js` — Starts the server, sends requests, and asserts correct responses across all HTTP methods and paths
+
+## Architecture
+
+This project follows **Clean Architecture** principles adapted for a lightweight Node.js HTTP server. Each module has a single responsibility, dependencies flow inward, and the core business logic (the Hello World response) remains untouched at the center.
+
+### Design Patterns
+
+- **Factory Pattern** — `src/app.js` creates and returns a configured server instance, enabling test environments to create servers without binding to a port.
+- **Middleware Chain** — Request processing flows through a composed pipeline: `securityHeaders` → `requestLogger` → `helloHandler` → `errorHandler`. Each middleware has a single responsibility, and new concerns can be added without modifying existing code (Open/Closed Principle).
+- **Dependency Injection** — Logger and configuration are passed as parameters rather than imported as global state, enabling easy mocking in tests.
+- **Configuration Externalization** — `src/config/index.js` reads `process.env` with fallback defaults, following the Twelve-Factor App methodology.
+
+### SOLID Principles
+
+| Principle | Application |
+|-----------|-------------|
+| **Single Responsibility** | Each file has exactly one reason to change (e.g., `helloHandler.js` changes only if response logic changes). |
+| **Open/Closed** | The middleware pipeline is open for extension but closed for modification. |
+| **Liskov Substitution** | The logger follows a consistent interface (`info`, `warn`, `error`) that can be swapped for any compatible implementation. |
+| **Interface Segregation** | Each middleware exports a focused function with the `(req, res, next)` signature. |
+| **Dependency Inversion** | High-level modules depend on abstractions (config object, logger interface) rather than concrete implementations. |
+
+### Graceful Shutdown
+
+The server handles `SIGINT` and `SIGTERM` signals to shut down gracefully — closing active connections and logging shutdown events before exiting. This prevents data loss and ensures clean process termination in production environments.
+
+## License
+
+This project is provided as-is for demonstration and learning purposes.
