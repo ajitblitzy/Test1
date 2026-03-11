@@ -1,0 +1,13 @@
+{
+  "name": "test1",
+  "version": "1.0.0",
+  "description": "A minimal, performance-optimized Node.js HTTP server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "jest --watchAll=false"
+  },
+  "devDependencies": {
+    "jest": "29.7.0"
+  }
+}

@@ -1,14 +1,25 @@
-const http = require('http');
+'use strict';
 
-const hostname = '127.0.0.1';
-const port = 3000;
+/**
+ * Application entry point.
+ *
+ * Thin orchestrator that reads the centralized configuration and delegates
+ * to either the multi-core clustering module or the single-process HTTP
+ * server factory.  Running `node server.js` (Rule R-006) starts the
+ * application in the mode determined by the ENABLE_CLUSTERING environment
+ * variable (default: single-process, Rule R-008).
+ *
+ * @see {@link module:config}       for environment-based configuration
+ * @see {@link module:src/cluster}  for multi-core worker forking
+ * @see {@link module:src/app}      for the HTTP server factory
+ */
 
-const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello, World!\n');
-});
+const config = require('./config');
 
-server.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
-});
+if (config.enableClustering) {
+  const { startCluster } = require('./src/cluster');
+  startCluster();
+} else {
+  const { createApp } = require('./src/app');
+  createApp();
+}
